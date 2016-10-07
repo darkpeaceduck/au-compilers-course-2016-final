@@ -9,9 +9,30 @@ module Expr =
     | Var   of string
     | Binop of string * t * t
 
+    let eval_binop o l r =
+      let bool_to_int = function true -> 1 | _ -> 0 in
+      match o with
+      | "+" -> l + r
+      | "-" -> l - r
+      | "*" -> l * r
+      | "/" -> l / r
+      | "%" -> l mod r
+      | _ ->
+         let r = match o with
+           | "<=" -> l <= r
+           | "<" -> l < r
+           | "==" -> l == r
+           | "!=" -> l != r
+           | ">=" -> l >= r
+           | ">" -> l > r
+           | "&&" -> (l != 0) && (r != 0)
+           | "!!" -> (l != 0) || (r != 0)
+           | _ -> failwith "No such operation!"
+         in bool_to_int r
+
     ostap (
       parse:
-        l:addi suf:(("<=" | "<" | "==" | "!=" | ">=" | ">") addi)* {
+        l:addi suf:(("<=" | "<" | "==" | "!=" | ">=" | ">" | "&&" | "!!") addi)* {
            List.fold_left (fun l (op, r) -> Binop (Token.repr op, l, r)) l suf
         }
       | addi;

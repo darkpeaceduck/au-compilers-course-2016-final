@@ -4,10 +4,10 @@ module Expr =
     open Language.Expr
 
     let rec eval state = function
-    | Const  n -> n
-    | Var    x -> state x
-    | Binop  _ -> failwith "not supported"
- 
+      | Const  n -> n
+      | Var    x -> state x
+      | Binop  (o, l, r) -> eval_binop o (eval state l) (eval state r)
+                                     
   end
   
 module Stmt =

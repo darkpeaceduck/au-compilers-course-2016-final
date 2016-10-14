@@ -1,0 +1,8 @@
+while e do s od
+if e then s else s fi
+repeat s until e
+for s,e,s do s od
+
+JMP of string
+CJMP of string
+LBL of string

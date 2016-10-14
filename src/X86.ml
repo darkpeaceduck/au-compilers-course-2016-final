@@ -121,12 +121,6 @@ module Compile =
                 env#local x;
                 let s::stack' = stack in
                 (stack', [X86Mov (s, M x)])
-             (*| S_ST x ->
-                env#local x;
-                let s::stack' = stack in
-                (stack', match s with
-                         | R _ -> [X86Mov (s, M x)]
-                         | _   -> [X86Mov (s, eax); X86Mov (eax, M x)])*)
              | S_BINOP o ->
                 let l::r::stack' = stack in
                 let rec ifnreg (x,y) = match x,y with

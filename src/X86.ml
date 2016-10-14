@@ -33,7 +33,7 @@ type instr =
   | X86Setne (* != *)
   | X86Setge (* >= *)
   | X86Setg (* > *)
-  | X86Cdq (* convert to quad *)
+  | X86Cdq (* convert double to quad *)
   | X86Mov  of opnd * opnd
   | X86Push of opnd
   | X86Pop  of opnd
@@ -70,23 +70,23 @@ module Show =
     | L i -> Printf.sprintf "$%d" i
 
     let instr = function
-      | X86Add (s1, s2) -> Printf.sprintf "\taddl\t%s,\t%s"  (opnd s1) (opnd s2)
-      | X86Sub (s1, s2) -> Printf.sprintf "\tsubl\t%s,\t%s"  (opnd s1) (opnd s2)
-      | X86Mul (s1, s2) -> Printf.sprintf "\timull\t%s,\t%s" (opnd s1) (opnd s2)
-      | X86Div s        -> Printf.sprintf "\tidivl\t%s"      (opnd s)
-      | X86Mov (s1, s2) -> Printf.sprintf "\tmovl\t%s,\t%s"  (opnd s1) (opnd s2)
+      | X86Add (x, y) -> Printf.sprintf "\taddl\t%s,\t%s"  (opnd x) (opnd y)
+      | X86Sub (x, y) -> Printf.sprintf "\tsubl\t%s,\t%s"  (opnd x) (opnd y)
+      | X86Mul (x, y) -> Printf.sprintf "\timull\t%s,\t%s" (opnd x) (opnd y)
+      | X86Div x        -> Printf.sprintf "\tidivl\t%s"      (opnd x)
+      | X86Mov (x, y) -> Printf.sprintf "\tmovl\t%s,\t%s"  (opnd x) (opnd y)
       | X86Cdq          -> "\tcdq"
-      | X86Cmp (s1, s2) -> Printf.sprintf "\tcmpl\t%s,\t%s"  (opnd s1) (opnd s2)
+      | X86Cmp (x, y) -> Printf.sprintf "\tcmpl\t%s,\t%s"  (opnd x) (opnd y)
       | X86Setle        -> Printf.sprintf "\tsetle\t%%al"
       | X86Setl         -> Printf.sprintf "\tsetl\t%%al"
       | X86Sete         -> Printf.sprintf "\tsete\t%%al"
       | X86Setne        -> Printf.sprintf "\tsetne\t%%al"
       | X86Setge        -> Printf.sprintf "\tsetge\t%%al"
       | X86Setg         -> Printf.sprintf "\tsetg\t%%al"
-      | X86Push s       -> Printf.sprintf "\tpushl\t%s"      (opnd s)
-      | X86Pop  s       -> Printf.sprintf "\tpopl\t%s"       (opnd s)
+      | X86Push x       -> Printf.sprintf "\tpushl\t%s"      (opnd x)
+      | X86Pop  x       -> Printf.sprintf "\tpopl\t%s"       (opnd x)
       | X86Ret          -> "\tret"
-      | X86Call p       -> Printf.sprintf "\tcall\t%s" p
+      | X86Call x       -> Printf.sprintf "\tcall\t%s" x
                                           
   end
 
@@ -139,7 +139,7 @@ module Compile =
                   | "+" -> [X86Add (x, y)]
                   | "-" -> [X86Sub (x, y)]
                   | "*" -> (match x,y with | _, R _ -> [X86Mul (x, y)] | _ -> [X86Mul (y, x); X86Mov (x, y)])
-                  | op -> [X86Mov (L 0, eax); X86Cmp (x, y); cmpop (o); X86Mov (eax, y)]
+                  | op -> [X86Mov (L 0, eax); X86Cmp (x, y); cmpop (op); X86Mov (eax, y)]
                 in
                 match o with
                 | "/" -> (r::stack', [X86Mov (r, eax); X86Cdq; X86Div (l); X86Mov (eax, r)])

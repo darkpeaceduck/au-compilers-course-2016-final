@@ -27,18 +27,13 @@ type instr =
   | X86Mul  of opnd * opnd (* * *)
   | X86Div  of opnd (* / *)
   | X86Cmp  of opnd * opnd (* cmp *)
-  | X86Setle (* <= *)
-  | X86Setl (* < *)
-  | X86Sete (* == *)
-  | X86Setne (* != *)
-  | X86Setge (* >= *)
-  | X86Setg (* > *)
+  | X86Set  of string * string (* <= < == != >= > *)
   | X86Cdq (* convert double to quad *)
   | X86Mov  of opnd * opnd
   | X86Push of opnd
   | X86Pop  of opnd
   | X86Ret
-  | X86Call of string    
+  | X86Call of string
              
 module S = Set.Make (String)
 
@@ -77,12 +72,7 @@ module Show =
       | X86Mov (x, y) -> Printf.sprintf "\tmovl\t%s,\t%s"  (opnd x) (opnd y)
       | X86Cdq          -> "\tcdq"
       | X86Cmp (x, y) -> Printf.sprintf "\tcmpl\t%s,\t%s"  (opnd x) (opnd y)
-      | X86Setle        -> Printf.sprintf "\tsetle\t%%al"
-      | X86Setl         -> Printf.sprintf "\tsetl\t%%al"
-      | X86Sete         -> Printf.sprintf "\tsete\t%%al"
-      | X86Setne        -> Printf.sprintf "\tsetne\t%%al"
-      | X86Setge        -> Printf.sprintf "\tsetge\t%%al"
-      | X86Setg         -> Printf.sprintf "\tsetg\t%%al"
+      | X86Set (s1, s2) -> Printf.sprintf "\tset%s\t%%%s" (s1) (s2)
       | X86Push x       -> Printf.sprintf "\tpushl\t%s"      (opnd x)
       | X86Pop  x       -> Printf.sprintf "\tpopl\t%s"       (opnd x)
       | X86Ret          -> "\tret"
@@ -128,18 +118,14 @@ module Compile =
                   | _ -> ([X86Mov (x, edx)], edx)
                 in
                 let cmpop = function
-                  | "<=" -> X86Setle
-                  | "<"  -> X86Setl
-                  | "==" -> X86Sete
-                  | "!=" -> X86Setne
-                  | ">=" -> X86Setge
-                  | ">"  -> X86Setg
+                  | "<=" -> "le" | "<"  -> "l"  | "==" -> "e"
+                  | "!=" -> "ne" | ">=" -> "ge" | ">"  -> "g"
                 in
                 let cmd (x,y) = function
                   | "+" -> [X86Add (x, y)]
                   | "-" -> [X86Sub (x, y)]
                   | "*" -> (match x,y with | _, R _ -> [X86Mul (x, y)] | _ -> [X86Mul (y, x); X86Mov (x, y)])
-                  | op -> [X86Mov (L 0, eax); X86Cmp (x, y); cmpop (op); X86Mov (eax, y)]
+                  | op -> [X86Mov (L 0, eax); X86Cmp (x, y); X86Set (cmpop(op), "al"); X86Mov (eax, y)]
                 in
                 match o with
                 | "/" -> (r::stack', [X86Mov (r, eax); X86Cdq; X86Div (l); X86Mov (eax, r)])

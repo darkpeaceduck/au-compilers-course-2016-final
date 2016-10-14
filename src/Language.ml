@@ -87,6 +87,7 @@ module Stmt =
       | %"read"  "(" x:IDENT ")"         {Read x}
       | %"write" "(" e:!(Expr.parse) ")" {Write e}
       | %"skip"                          {Skip}
+    (*| %"if" e:!(Expr.parse) *)
     )
 
   end

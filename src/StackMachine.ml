@@ -50,16 +50,17 @@ module Compile =
     let rec expr = function
     | Var   x -> [S_LD   x]
     | Const n -> [S_PUSH n]
+    (* | Binop (o, l, r) -> expr l @ expr r @ [S_BINOP o]*)
     | Binop (o, l, r) ->
        let (l', r') = (expr l, expr r) in
        match o with
        | "&&" | "!!" ->
           let nesum = [S_PUSH 0] @ l' @ [S_BINOP "!="] @ [S_PUSH 0] @ r' @ [S_BINOP "!="] @ [S_BINOP "+"] in
           (match o with
-          | "&&" -> [S_PUSH 2] @ nesum @ [S_BINOP "=="]
-          | "!!" -> [S_PUSH 0] @ nesum @ [S_BINOP "<"])
+           | "&&" -> [S_PUSH 2] @ nesum @ [S_BINOP "=="]
+           | _ -> [S_PUSH 0] @ nesum @ [S_BINOP "<"])
        | _ -> l' @ r' @ [S_BINOP o]
-
+                          
     let rec stmt = function
     | Skip          -> []
     | Assign (x, e) -> expr e @ [S_ST x]

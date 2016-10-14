@@ -3,8 +3,8 @@ type opnd = R of int | S of int | M of string | L of int
 let x86regs = [|
     "%eax";
     "%edx";
-    "%ecx";
     "%ebx";
+    "%ecx";
     "%esi";
     "%edi"
   |]
@@ -16,8 +16,8 @@ let word_size = 4
 
 let eax = R 0
 let edx = R 1
-let ecx = R 2
-let ebx = R 3
+let ebx = R 2
+let ecx = R 3
 let esi = R 4
 let edi = R 5
 
@@ -38,8 +38,8 @@ type instr =
   | X86Push of opnd
   | X86Pop  of opnd
   | X86Ret
-  | X86Call of string
-                 
+  | X86Call of string    
+             
 module S = Set.Make (String)
 
 class x86env =
@@ -87,7 +87,7 @@ module Show =
       | X86Pop  s       -> Printf.sprintf "\tpopl\t%s"       (opnd s)
       | X86Ret          -> "\tret"
       | X86Call p       -> Printf.sprintf "\tcall\t%s" p
-
+                                          
   end
 
 module Compile =
@@ -102,44 +102,56 @@ module Compile =
 	| i::code' ->
 	   let (stack', x86code) =
              match i with
-             | S_READ   -> ([R ff], [X86Call "read"; X86Mov (eax, R ff)])
-             | S_WRITE  -> ([], [X86Push (R ff); X86Call "write"; X86Pop (R ff)])
+             | S_READ ->
+                let s = allocate env stack in
+                (s::stack, [X86Call "read"; X86Mov (eax, s)])
+             | S_WRITE ->
+                let s::stack'' = stack in
+                (stack'', [X86Push (s); X86Call "write"; X86Pop (s)]) 
              | S_PUSH n ->
 		let s = allocate env stack in
 		(s::stack, [X86Mov (L n, s)])
-             | S_LD x   ->
+             | S_LD x ->
                 env#local x;
                 let s = allocate env stack in
-                (s::stack, [X86Mov (M x, s)])
+                (s::stack, match s with
+                           | R _ -> [X86Mov (M x, s)]
+                           | _ -> [X86Mov (M x, eax); X86Mov (eax, s)])
              | S_ST x   ->
                 env#local x;
                 let s::stack' = stack in
                 (stack', [X86Mov (s, M x)])
+             (*| S_ST x ->
+                env#local x;
+                let s::stack' = stack in
+                (stack', match s with
+                         | R _ -> [X86Mov (s, M x)]
+                         | _   -> [X86Mov (s, eax); X86Mov (eax, M x)])*)
              | S_BINOP o ->
-                let x::y::stack' = stack in
+                let l::r::stack' = stack in
+                let rec ifnreg (x,y) = match x,y with
+                  | R _, _ | _, R _ -> ([], x)
+                  | _ -> ([X86Mov (x, edx)], edx)
+                in
+                let cmpop = function
+                  | "<=" -> X86Setle
+                  | "<"  -> X86Setl
+                  | "==" -> X86Sete
+                  | "!=" -> X86Setne
+                  | ">=" -> X86Setge
+                  | ">"  -> X86Setg
+                in
+                let cmd (x,y) = function
+                  | "+" -> [X86Add (x, y)]
+                  | "-" -> [X86Sub (x, y)]
+                  | "*" -> (match x,y with | _, R _ -> [X86Mul (x, y)] | _ -> [X86Mul (y, x); X86Mov (x, y)])
+                  | op -> [X86Mov (L 0, eax); X86Cmp (x, y); cmpop (o); X86Mov (eax, y)]
+                in
                 match o with
-                | "/" | "%" -> (y::stack', [X86Mov (y, eax); X86Cdq; X86Div (x); X86Mov ((match o with | "/" -> eax | _ -> edx), y)])
-                | _ -> let moveax, x' =
-                         match x, y with
-                         | R _, _ | _, R _ -> ([], x)
-                         | _ -> ([X86Mov (x, eax)], eax)
-                       in
-                       let cmd = function
-                         | "+" -> [X86Add (x', y)]
-                         | "-" -> [X86Sub (x', y)]
-                         | "*" -> [X86Mul (x', y)]
-                         | _ ->
-                            let cmdcmp = function
-                              | "<=" -> X86Setle
-                              | "<"  -> X86Setl
-                              | "==" -> X86Sete
-                              | "!=" -> X86Setne
-                              | ">=" -> X86Setge
-                              | ">"  -> X86Setg
-                            in
-                            [X86Mov (L 0, eax); X86Cmp (x', y); cmdcmp (o); X86Mov (eax, y)]
-                       in
-                       (y::stack', moveax @ cmd o)
+                | "/" -> (r::stack', [X86Mov (r, eax); X86Cdq; X86Div (l); X86Mov (eax, r)])
+                | "%" -> (r::stack', [X86Mov (r, eax); X86Cdq; X86Div (l); X86Mov (edx, r)])
+                | _ -> let (p, l') = ifnreg (l, r)
+                       in (r::stack', p @ cmd (l', r) (o))
 	   in
 	   x86code @ compile stack' code'
       in

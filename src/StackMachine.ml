@@ -67,5 +67,6 @@ module Compile =
     | Read    x     -> [S_READ; S_ST x]
     | Write   e     -> expr e @ [S_WRITE]
     | Seq    (l, r) -> stmt l @ stmt r
+    | _ -> failwith "s i cf"
 
   end

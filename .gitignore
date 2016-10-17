@@ -18,6 +18,7 @@ src/META
 regression/performance/data.gnuplot
 regression/performance/names.data
 regression/performance/*.log
+_build/
 
 # ??
 /Makefile

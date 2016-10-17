@@ -18,8 +18,8 @@ $(CTESTS): %: %.c
 
 $(EXPRTESTS): export RUNTIME_O=../../runtime/runtime.o
 $(EXPRTESTS): %: %.expr
-	../../src/rc.byte     $< && /usr/bin/time -o expr.data    --append -f '%U' ./$@ > $@.log | tr -d '\n' >> data.gnuplot && diff $@.log orig/$@.log 
-	../../src/rc.native -so $< && /usr/bin/time -o expr-so.data --append -f '%U' ./$@ > $@.log | tr -d '\n' >> data.gnuplot && diff $@.log orig/$@.log 
+	../../rc.native     $< && /usr/bin/time -o expr.data    --append -f '%U' ./$@ > $@.log | tr -d '\n' >> data.gnuplot && diff $@.log orig/$@.log 
+	../../rc.native -so $< && /usr/bin/time -o expr-so.data --append -f '%U' ./$@ > $@.log | tr -d '\n' >> data.gnuplot && diff $@.log orig/$@.log 
 
 clean:
 	rm -f *.log *.s *~ $(TESTS)

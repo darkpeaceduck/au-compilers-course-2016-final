@@ -26,6 +26,7 @@ module Stmt =
 	| Read    x     ->
 	    let y::input' = input in
 	    ((x, y) :: state, input', output)
+        | _ -> failwith "should implement if while cfx"
       in
       let (_, _, result) = eval' ([], input, []) stmt in
       result

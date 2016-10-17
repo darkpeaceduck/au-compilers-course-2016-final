@@ -1,4 +1,5 @@
-TESTS=$(sort $(basename $(wildcard test*.expr)))
+#TESTS=$(sort $(basename $(wildcard test*.expr)))
+TESTS=test010 test014 test016 test017
 
 .PHONY: check $(TESTS)
 

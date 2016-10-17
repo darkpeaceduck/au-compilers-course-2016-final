@@ -90,7 +90,7 @@ module Stmt =
       | %"write" "(" e:!(Expr.parse) ")"                              {Write e}
       | %"skip"                                                       {Skip}
       | %"while" e:!(Expr.parse) %"do" s:parse %"od"                  {While (e, s)}
-      | %"if" e:!(Expr.parse) %"then" s1:parse %"else" s2:parse %"fi" {If (e, s1, s2)}
+  (*| %"if" e:!(Expr.parse) %"then" s1:parse %"else" s2:parse %"fi" {If (e, s1, s2)}*)
   )
   
   end

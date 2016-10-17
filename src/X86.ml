@@ -34,6 +34,9 @@ type instr =
   | X86Pop  of opnd
   | X86Ret
   | X86Call of string
+  | X86Lbl  of string
+  | X86Jmp  of string
+  | X86Jnz  of string
              
 module S = Set.Make (String)
 
@@ -77,6 +80,9 @@ module Show =
       | X86Pop  x       -> Printf.sprintf "\tpopl\t%s"       (opnd x)
       | X86Ret          -> "\tret"
       | X86Call x       -> Printf.sprintf "\tcall\t%s" x
+      | X86Lbl s        -> Printf.sprintf "%s:" s
+      | X86Jmp s        -> Printf.sprintf "\tjmp\t%s" s
+      | X86Jnz s        -> Printf.sprintf "\tjnz\t%s" s
                                           
   end
 
@@ -112,7 +118,7 @@ module Compile =
                 let s::stack' = stack in
                 (stack', [X86Mov (s, M x)])
              | S_BINOP o ->
-                let l::r::stack' = stack in
+                (let l::r::stack' = stack in
                 let rec ifnreg (x,y) = match x,y with
                   | R _, _ | _, R _ -> ([], x)
                   | _ -> ([X86Mov (x, edx)], edx)
@@ -131,8 +137,13 @@ module Compile =
                 | "/" -> (r::stack', [X86Mov (r, eax); X86Cdq; X86Div (l); X86Mov (eax, r)])
                 | "%" -> (r::stack', [X86Mov (r, eax); X86Cdq; X86Div (l); X86Mov (edx, r)])
                 | _ -> let (p, l') = ifnreg (l, r)
-                       in (r::stack', p @ cmd (l', r) (o))
-	   in
+                       in (r::stack', p @ cmd (l', r) (o)))
+             | S_LBL s -> (stack, [X86Lbl s])
+             | S_JMP s -> (stack, [X86Jmp s])
+             | S_CJMP s ->
+                let y::stack' = stack in
+                (stack', [X86Cmp (L 0, y); X86Jnz s])
+           in
 	   x86code @ compile stack' code'
       in
       compile [] code

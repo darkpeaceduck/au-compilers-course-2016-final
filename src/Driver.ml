@@ -20,7 +20,10 @@ let main = ()
   try
     let mode, filename =
       match Sys.argv.(1) with
-      | "-s" -> `SM , Sys.argv.(2)
+      | "-s" ->
+         (match Sys.argv.(2) with
+         | "-d" -> `DebugSM , Sys.argv.(3)
+         | _ -> `SM , Sys.argv.(2))
       | "-o" -> `X86, Sys.argv.(2)
       | _    -> `Int, Sys.argv.(1)
     in
@@ -42,9 +45,12 @@ let main = ()
 	     let output =
 	       match mode with
 	       | `SM -> StackMachine.Interpreter.run input (StackMachine.Compile.stmt stmt)
+               | `DebugSM -> [0]
 	       | _   -> Interpreter.Stmt.eval input stmt
 	     in
-	     List.iter (fun i -> Printf.printf "%d\n" i) output
+             match mode with
+             | `DebugSM -> List.iter (fun i -> Printf.printf "%s\n" (StackMachine.debug i)) (StackMachine.Compile.stmt stmt)
+	     | _ -> List.iter (fun i -> Printf.printf "%d\n" i) output
 	)
 
     | `Fail er -> Printf.eprintf "%s" er

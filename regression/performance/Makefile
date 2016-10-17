@@ -16,9 +16,10 @@ $(CTESTS): %: %.c
 	gcc -o $@-O0 -m32 -O0 $< && /usr/bin/time -o o0.data --append -f '%U' ./$@-O0 > $@.log && diff $@.log orig/`echo $@.log | sed 's/^c/expr/'` 
 	gcc -o $@-O3 -m32 -O3 $< && /usr/bin/time -o o3.data --append -f '%U' ./$@-O3 > $@.log && diff $@.log orig/`echo $@.log | sed 's/^c/expr/'` 
 
+$(EXPRTESTS): export RUNTIME_O=../../runtime/runtime.o
 $(EXPRTESTS): %: %.expr
-	RC_RUNTIME=../../runtime ../../rc.native     $< && /usr/bin/time -o expr.data    --append -f '%U' ./$@ > $@.log | tr -d '\n' >> data.gnuplot && diff $@.log orig/$@.log 
-	RC_RUNTIME=../../runtime ../../rc.native -so $< && /usr/bin/time -o expr-so.data --append -f '%U' ./$@ > $@.log | tr -d '\n' >> data.gnuplot && diff $@.log orig/$@.log 
+	../../src/rc.byte     $< && /usr/bin/time -o expr.data    --append -f '%U' ./$@ > $@.log | tr -d '\n' >> data.gnuplot && diff $@.log orig/$@.log 
+	../../src/rc.native -so $< && /usr/bin/time -o expr-so.data --append -f '%U' ./$@ > $@.log | tr -d '\n' >> data.gnuplot && diff $@.log orig/$@.log 
 
 clean:
 	rm -f *.log *.s *~ $(TESTS)

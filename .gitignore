@@ -19,7 +19,8 @@ regression/performance/data.gnuplot
 regression/performance/names.data
 regression/performance/*.log
 
-Makefile
+# ??
+/Makefile
 src/Makefile
 config.log
 config.status

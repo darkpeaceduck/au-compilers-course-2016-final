@@ -10,7 +10,7 @@ let x86regs = [|
   |]
 
 let num_of_regs = Array.length x86regs
-let ff = 2 (* first free register *)
+let ff = 2
 let rff = R ff
 let word_size = 4
 
@@ -21,22 +21,35 @@ let ecx = R 3
 let esi = R 4
 let edi = R 5
 
+type prei =
+  | Add
+  | Sub
+  | Mul
+  | Cmp
+  | Mov
+  | Div
+  | Push
+  | Pop
+
+let to_str = function
+  | Add  -> "addl"
+  | Sub  -> "subl"
+  | Mul  -> "imull"
+  | Cmp  -> "cmpl"
+  | Mov  -> "movl"
+  | Div  -> "idivl"
+  | Push -> "pushl"
+  | Pop  -> "popl"
+            
 type instr =
-  | X86Add  of opnd * opnd (* + *)
-  | X86Sub  of opnd * opnd (* - *)
-  | X86Mul  of opnd * opnd (* * *)
-  | X86Div  of opnd (* / *)
-  | X86Cmp  of opnd * opnd (* cmp *)
+  | X86Dop  of prei * opnd * opnd (* add, sub, mul, cmp, mov *)
+  | X86Sop  of prei * opnd (* div, push, pop *)
+  | X86Cdq
   | X86Set  of string * string (* <= < == != >= > *)
-  | X86Cdq (* convert double to quad *)
-  | X86Mov  of opnd * opnd
-  | X86Push of opnd
-  | X86Pop  of opnd
-  | X86Ret
   | X86Call of string
   | X86Lbl  of string
   | X86Jmp  of string
-  | X86Jnz  of string
+  | X86J    of string * string
              
 module S = Set.Make (String)
 
@@ -68,21 +81,14 @@ module Show =
     | L i -> Printf.sprintf "$%d" i
 
     let instr = function
-      | X86Add (x, y) -> Printf.sprintf "\taddl\t%s,\t%s"  (opnd x) (opnd y)
-      | X86Sub (x, y) -> Printf.sprintf "\tsubl\t%s,\t%s"  (opnd x) (opnd y)
-      | X86Mul (x, y) -> Printf.sprintf "\timull\t%s,\t%s" (opnd x) (opnd y)
-      | X86Div x        -> Printf.sprintf "\tidivl\t%s"      (opnd x)
-      | X86Mov (x, y) -> Printf.sprintf "\tmovl\t%s,\t%s"  (opnd x) (opnd y)
-      | X86Cdq          -> "\tcdq"
-      | X86Cmp (x, y) -> Printf.sprintf "\tcmpl\t%s,\t%s"  (opnd x) (opnd y)
-      | X86Set (s1, s2) -> Printf.sprintf "\tset%s\t%%%s" (s1) (s2)
-      | X86Push x       -> Printf.sprintf "\tpushl\t%s"      (opnd x)
-      | X86Pop  x       -> Printf.sprintf "\tpopl\t%s"       (opnd x)
-      | X86Ret          -> "\tret"
-      | X86Call x       -> Printf.sprintf "\tcall\t%s" x
-      | X86Lbl s        -> Printf.sprintf "%s:" s
-      | X86Jmp s        -> Printf.sprintf "\tjmp\t%s" s
-      | X86Jnz s        -> Printf.sprintf "\tjnz\t%s" s
+      | X86Dop (s, x, y) -> Printf.sprintf "\t%s\t%s,\t%s" (to_str s) (opnd x) (opnd y)
+      | X86Sop (s, x)    -> Printf.sprintf "\t%s\t%s" (to_str s) (opnd x)
+      | X86Cdq           -> "\tcdq"
+      | X86Set (s1, s2)  -> Printf.sprintf "\tset%s\t%%%s" (s1) (s2)
+      | X86Call s        -> Printf.sprintf "\tcall\t%s" s
+      | X86Lbl s         -> Printf.sprintf "%s:" s
+      | X86Jmp s         -> Printf.sprintf "\tjmp\t%s" s
+      | X86J   (s, l)    -> Printf.sprintf "\tj%s\t%s" s l
                                           
   end
 
@@ -100,49 +106,48 @@ module Compile =
              match i with
              | S_READ ->
                 let s = allocate env stack in
-                (s::stack, [X86Call "read"; X86Mov (eax, s)])
+                (s::stack, [X86Call "read"; X86Dop (Mov, eax, s)])
              | S_WRITE ->
                 let s::stack'' = stack in
-                (stack'', [X86Push (s); X86Call "write"; X86Pop (s)]) 
+                (stack'', [X86Sop (Push, s); X86Call "write"; X86Sop (Pop, s)]) 
              | S_PUSH n ->
 		let s = allocate env stack in
-		(s::stack, [X86Mov (L n, s)])
+		(s::stack, [X86Dop (Mov, L n, s)])
              | S_LD x ->
                 env#local x;
                 let s = allocate env stack in
                 (s::stack, match s with
-                           | R _ -> [X86Mov (M x, s)]
-                           | _ -> [X86Mov (M x, eax); X86Mov (eax, s)])
+                           | R _ -> [X86Dop (Mov, M x, s)]
+                           | _ -> [X86Dop (Mov, M x, eax); X86Dop (Mov, eax, s)])
              | S_ST x   ->
                 env#local x;
                 let s::stack' = stack in
-                (stack', [X86Mov (s, M x)])
+                (stack', [X86Dop (Mov, s, M x)])
              | S_BINOP o ->
                 (let l::r::stack' = stack in
                 let rec ifnreg (x,y) = match x,y with
                   | R _, _ | _, R _ -> ([], x)
-                  | _ -> ([X86Mov (x, edx)], edx)
+                  | _ -> ([X86Dop (Mov, x, edx)], edx)
                 in
                 let cmpop = function
                   | "<=" -> "le" | "<"  -> "l"  | "==" -> "e"
                   | "!=" -> "ne" | ">=" -> "ge" | ">"  -> "g"
                 in
                 let cmd (x,y) = function
-                  | "+" -> [X86Add (x, y)]
-                  | "-" -> [X86Sub (x, y)]
-                  | "*" -> (match x,y with | _, R _ -> [X86Mul (x, y)] | _ -> [X86Mul (y, x); X86Mov (x, y)])
-                  | op -> [X86Mov (L 0, eax); X86Cmp (x, y); X86Set (cmpop(op), "al"); X86Mov (eax, y)]
+                  | "+" -> [X86Dop (Add, x, y)]
+                  | "-" -> [X86Dop (Sub, x, y)]
+                  | "*" -> (match x,y with | _, R _ -> [X86Dop (Mul, x, y)] | _ -> [X86Dop (Mul, y, x); X86Dop (Mov, x, y)])
+                  | op -> [X86Dop (Mov, L 0, eax); X86Dop (Cmp, x, y); X86Set (cmpop(op), "al"); X86Dop (Mov, eax, y)]
                 in
                 match o with
-                | "/" -> (r::stack', [X86Mov (r, eax); X86Cdq; X86Div (l); X86Mov (eax, r)])
-                | "%" -> (r::stack', [X86Mov (r, eax); X86Cdq; X86Div (l); X86Mov (edx, r)])
+                | "/" | "%" -> (r::stack', [X86Dop (Mov, r, eax); X86Cdq; X86Sop (Div, l); X86Dop (Mov, (if (o = "/") then eax else edx), r)])
                 | _ -> let (p, l') = ifnreg (l, r)
                        in (r::stack', p @ cmd (l', r) (o)))
              | S_LBL s -> (stack, [X86Lbl s])
-             | S_JMP s -> (stack, [X86Jmp s])
-             | S_CJMP s ->
+             | S_JMP l -> (stack, [X86Jmp l])
+             | S_CJMP (s, l) ->
                 let y::stack' = stack in
-                (stack', [X86Cmp (L 0, y); X86Jnz s])
+                (stack', [X86Dop (Mov, y, eax); X86Dop (Cmp, L 0, eax); X86J (s, l)])
            in
 	   x86code @ compile stack' code'
       in

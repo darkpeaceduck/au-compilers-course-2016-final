@@ -21,15 +21,16 @@ module Expr =
          let e = match o with
            | "<=" -> l <= r
            | "<" -> l < r
-           | "==" -> l == r
-           | "!=" -> l != r
+           | "==" -> l = r
+           | "!=" -> l <> r
            | ">=" -> l >= r
            | ">" -> l > r
-           | "&&" -> (l != 0) && (r != 0)
-           | "!!" -> (l != 0) || (r != 0)
+           | "&&" -> (l <> 0) && (r <> 0)
+           | "!!" -> (l <> 0) || (r <> 0)
          in bool_to_int e
 
   ostap (
+                       
     parse:
       l:andi suf:("!!" andi)* {
         List.fold_left (fun l (op, r) -> Binop (Token.repr op, l, r)) l suf
@@ -90,7 +91,7 @@ module Stmt =
       | %"write" "(" e:!(Expr.parse) ")"                              {Write e}
       | %"skip"                                                       {Skip}
       | %"while" e:!(Expr.parse) %"do" s:parse %"od"                  {While (e, s)}
-  (*| %"if" e:!(Expr.parse) %"then" s1:parse %"else" s2:parse %"fi" {If (e, s1, s2)}*)
+      | %"if" e:!(Expr.parse) %"then" a:parse %"else" b:parse %"fi"   {If (e, a, b)}
   )
   
   end

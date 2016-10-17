@@ -7,7 +7,7 @@ type i =
 | S_BINOP of string
 | S_LBL   of string
 | S_JMP   of string
-| S_CJMP  of string
+| S_CJMP  of string * string
 
 let debug instr =
   match instr with
@@ -19,7 +19,7 @@ let debug instr =
   | S_BINOP s -> Printf.sprintf "S_BINOP %s" s
   | S_LBL s -> Printf.sprintf "S_LBL %s" s
   | S_JMP s -> Printf.sprintf "S_JMP %s" s
-  | S_CJMP s -> Printf.sprintf "S_CJMP %s" s
+  | S_CJMP (s1, s2) -> Printf.sprintf "S_CJMP %s %s" s1 s2
                
 module Interpreter =
   struct
@@ -41,10 +41,13 @@ module Interpreter =
 	| []       -> output
 	| i::code' ->
            match i with
-           | S_JMP s -> run' c (List.assoc s labels)
-           | S_CJMP s ->
+           | S_JMP l -> run' c (List.assoc l labels)
+           | S_CJMP (s, l) ->
               let y::stack' = stack in
-              run' (state, stack', input, output, labels) (if y > 0 then List.assoc s labels else code')
+              run' (state, stack', input, output, labels)
+                   (match s with
+                    | "z" -> if y = 0 then List.assoc l labels else code'
+                    | "nz" -> if y <> 0 then List.assoc l labels else code')
            | _ ->
 	      run'
                 (match i with
@@ -108,10 +111,14 @@ module Compile =
         | Read    x     -> [S_READ; S_ST x]
         | Write   e     -> expr e @ [S_WRITE]
         | Seq    (l, r) -> stmt' l nv @ stmt' r nv
-        | While  (e, s) ->
-           let lbl1 = to_lbl nv in
-           let lbl2 = to_lbl nv in
-           [S_LBL lbl1] @ expr e @ [S_PUSH 0; S_BINOP "=="] @ [S_CJMP lbl2] @ stmt' s nv @ [S_JMP lbl1] @ [S_LBL lbl2]
+        | While _ | If _ ->
+           (let lbl1 = to_lbl nv in
+            let lbl2 = to_lbl nv in
+            match ast with
+            | While  (e, s) ->
+               [S_LBL lbl1] @ expr e @ [S_CJMP ("z", lbl2)] @ stmt' s nv @ [S_JMP lbl1] @ [S_LBL lbl2]
+            | If (e, s1, s2) ->
+               expr e @ [S_CJMP ("z", lbl2)] @ stmt' s1 nv @ [S_JMP lbl1] @ [S_LBL lbl2] @ stmt' s2 nv @ [S_LBL lbl1])
       in
       stmt' ast (new nextVal)
 

@@ -32,8 +32,8 @@ module Stmt =
              eval' (eval' c s) (While (e, s))
            else
              eval' c Skip
-      (*| If (e, s1, s2) ->
-           eval' c (if (Expr.eval state' e) > 0 then s1 else s2)*)
+        | If (e, s1, s2) ->
+           eval' c (if (Expr.eval state' e) > 0 then s1 else s2)
       in
       let (_, _, result) = eval' ([], input, []) stmt in
       result

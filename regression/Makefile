@@ -1,9 +1,8 @@
 THIS_FILE=$(lastword $(MAKEFILE_LIST))
 
 #TESTS=$(sort $(basename $(wildcard test*.expr)))
-#TESTS=test010 test014 test016 test017
-#TESTS=$(sort $(filter-out test011, $(basename $(wildcard test*.expr))))
-TESTS=$(sort $(filter-out test011, $(basename $(wildcard test0[01][012345678].expr))))
+#TESTS=$(sort $(filter-out test011, $(basename $(wildcard test*.expr)))) # funcs (?)
+TESTS=$(sort $(filter-out test011, $(basename $(wildcard test0[01][012345678].expr))) test009) # if + while
 
 TESTSI=$(addsuffix .i, $(TESTS))
 TESTSS=$(addsuffix .s, $(TESTS))

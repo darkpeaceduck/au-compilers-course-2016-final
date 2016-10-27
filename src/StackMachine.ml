@@ -1,29 +1,34 @@
-type i =
-| S_READ
-| S_WRITE
-| S_PUSH  of int
-| S_LD    of string
-| S_ST    of string
-| S_BINOP of string
-| S_LBL   of string
-| S_JMP   of string
-| S_CJMP  of string * string
+module Instructions =
+  struct
 
-let debug instr =
-  match instr with
-  | S_READ -> "S_READ"
-  | S_WRITE -> "S_WRITE"
-  | S_PUSH n -> Printf.sprintf "S_PUSH %d" n
-  | S_LD s -> Printf.sprintf "S_LD %s" s
-  | S_ST s -> Printf.sprintf "S_ST %s" s
-  | S_BINOP s -> Printf.sprintf "S_BINOP %s" s
-  | S_LBL s -> Printf.sprintf "S_LBL %s" s
-  | S_JMP s -> Printf.sprintf "S_JMP %s" s
-  | S_CJMP (s1, s2) -> Printf.sprintf "S_CJMP %s %s" s1 s2
-               
+    type i =
+      | S_READ
+      | S_WRITE
+      | S_PUSH  of int
+      | S_LD    of string
+      | S_ST    of string
+      | S_BINOP of string
+      | S_LBL   of string
+      | S_JMP   of string
+      | S_CJMP  of string * string
+                              
+    let debug = function
+      | S_READ -> "S_READ"
+      | S_WRITE -> "S_WRITE"
+      | S_PUSH n -> Printf.sprintf "S_PUSH %d" n
+      | S_LD s -> Printf.sprintf "S_LD %s" s
+      | S_ST s -> Printf.sprintf "S_ST %s" s
+      | S_BINOP s -> Printf.sprintf "S_BINOP %s" s
+      | S_LBL s -> Printf.sprintf "S_LBL %s" s
+      | S_JMP s -> Printf.sprintf "S_JMP %s" s
+      | S_CJMP (s1, s2) -> Printf.sprintf "S_CJMP %s %s" s1 s2
+                                          
+  end
+          
 module Interpreter =
   struct
 
+    open Instructions
     open Language.Expr
            
     let run input code =
@@ -78,6 +83,7 @@ module Interpreter =
 module Compile =
   struct
 
+    open Instructions
     open Language.Expr
     open Language.Stmt
 

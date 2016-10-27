@@ -61,7 +61,7 @@ object(self)
                                  
   val    allocated  = ref 0
   method allocate n = allocated := max n !allocated
-  method allocated  = !allocated
+  method allocated  = 1 + !allocated
 end
 
 let allocate env stack =
@@ -95,7 +95,7 @@ module Show =
 module Compile =
   struct
 
-    open StackMachine
+    open StackMachine.Instructions
 
     let stack_program env code =
       let rec compile stack code =

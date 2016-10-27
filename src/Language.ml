@@ -4,11 +4,6 @@ open Matcher
 module Expr =
   struct
 
-    type t =
-      | Const of int
-      | Var   of string
-      | Binop of string * t * t
-
     let eval_binop o l r =
       let bool_to_int = function true -> 1 | _ -> 0 in
       match o with
@@ -29,44 +24,37 @@ module Expr =
            | "!!" -> (l <> 0) || (r <> 0)
          in bool_to_int e
 
+    type t =
+      | Const of int
+      | Var   of string
+      | Binop of string * t * t
+
   ostap (
-                       
     parse:
-      l:andi suf:("!!" andi)* {
-        List.fold_left (fun l (op, r) -> Binop (Token.repr op, l, r)) l suf
-      }
-  | andi;
-    
-    andi:
-      l:cmpi suf:("&&" cmpi)* {
-          List.fold_left (fun l (op, r) -> Binop (Token.repr op, l, r)) l suf
-        }
-  | cmpi;
-    
-    cmpi:
-      l:addi suf:(("<=" | "<" | "==" | "!=" | ">=" | ">") addi)* {
-          List.fold_left (fun l (op, r) -> Binop (Token.repr op, l, r)) l suf
-        }
-  | addi;
-    
-    addi:
-      l:mulli suf:(("+" | "-") mulli)* {
-          List.fold_left (fun l (op, r) -> Binop (Token.repr op, l, r)) l suf
-        }
-  | mulli;
-    
-    mulli:
-      l:primary suf:(("*" | "/" | "%") primary)* {
-          List.fold_left (fun l (op, r) -> Binop (Token.repr op, l, r)) l suf
-        }
-  | primary;
-    
+    !(Ostap.Util.expr
+      (fun x -> x)
+      (Array.map
+        (
+          fun (a, s) ->
+          a, List.map (fun s -> ostap(- $(s)), (fun x y -> Binop (s, x, y))) s
+        )
+        [|
+        `Lefta, ["!!"];
+        `Lefta, ["&&"];
+        `Nona , ["=="; "!="; "<="; "<"; ">="; ">"];
+        `Lefta, ["+" ; "-"];
+        `Lefta, ["*" ; "/"; "%"];
+        |]
+      )
+      primary
+    );
+
     primary:
       n:DECIMAL {Const n}
-  |   x:IDENT   {Var   x}
-  |   -"(" parse -")"
+      | f:IDENT args:(-"(" !(Util.list0 parse) -")")? {match args with | None -> Var f}
+      | -"(" parse -")"                                              
   )
-  
+
   end
 
 module Stmt =
@@ -82,16 +70,25 @@ module Stmt =
       | Seq    of t * t
 
   ostap (
-    parse: s:simple d:(-";" parse)? {
-                                    match d with None -> s | Some d -> Seq (s, d)
-                                  };
+    parse: s:simple d:(-";" parse)? {match d with None -> s | Some d -> Seq (s, d)};
+    expr: !(Expr.parse);
     simple:
-      x:IDENT ":=" e:!(Expr.parse)                                    {Assign (x, e)}
-      | %"read"  "(" x:IDENT ")"                                      {Read x}
-      | %"write" "(" e:!(Expr.parse) ")"                              {Write e}
-      | %"skip"                                                       {Skip}
-      | %"while" e:!(Expr.parse) %"do" s:parse %"od"                  {While (e, s)}
-      | %"if" e:!(Expr.parse) %"then" a:parse %"else" b:parse %"fi"   {If (e, a, b)}
+      x:IDENT ":=" e:expr {Assign (x, e)}
+      | %"read" "(" x:IDENT ")" {Read x}
+      | %"write" "(" e:expr ")" {Write e}
+      | %"skip" {Skip}
+      | %"while" e:expr %"do" s:parse %"od" {While (e, s)}
+      | %"if" e:expr %"then" the:parse
+        elif:(%"elif" expr %"then" parse)*
+        ele:(%"else" parse)?                            
+        %"fi" {
+          If(e, the,
+            List.fold_right
+            (fun (e, t) elif -> If (e, t, elif))
+            elif
+            (match ele with | None -> Skip | Some s -> s)
+          )
+        }
   )
-  
+
   end

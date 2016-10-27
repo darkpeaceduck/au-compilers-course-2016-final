@@ -5,12 +5,12 @@ let parse infile =
   Util.parse
     (object
        inherit Matcher.t s
-       inherit Util.Lexers.ident ["read"; "write"; "skip"; "if"; "then"; "else"; "fi"; "while"; "do"; "od"] s
+       inherit Util.Lexers.ident ["read"; "write"; "skip"; "if"; "then"; "elif"; "else"; "fi"; "while"; "do"; "od"] s
        inherit Util.Lexers.decimal s
        inherit Util.Lexers.skip [
 	 Matcher.Skip.whitespaces " \t\n";
 	 Matcher.Skip.lineComment "--";
-	 Matcher.Skip. nestedComment "(*" "*)"
+	 Matcher.Skip.nestedComment "(*" "*)"
        ] s
      end
     )
@@ -49,7 +49,7 @@ let main = ()
 	       | _   -> Interpreter.Stmt.eval input stmt
 	     in
              match mode with
-             | `DebugSM -> List.iter (fun i -> Printf.printf "%s\n" (StackMachine.debug i)) (StackMachine.Compile.stmt stmt)
+             | `DebugSM -> List.iter (fun i -> Printf.printf "%s\n" (StackMachine.Instructions.debug i)) (StackMachine.Compile.stmt stmt)
 	     | _ -> List.iter (fun i -> Printf.printf "%d\n" i) output
 	)
 

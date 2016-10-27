@@ -11,4 +11,4 @@ $(TESTS): %: %.expr
 	../../rc.native  -o $< && cat $@.input | ./$@ > $@.log && diff $@.log orig/$@.log
 
 clean:
-	rm -f *.log *.s *~ $(TESTS)
+	rm -f *.log *.s *~ generated[0-9]*[0-9]

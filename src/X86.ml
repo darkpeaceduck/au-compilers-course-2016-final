@@ -79,7 +79,7 @@ module Show =
 
     let instr = function
       | X86Binop (o, x, y) -> Printf.sprintf "\t%s\t%s,\t%s" (binop_to_x86 o) (opnd x) (opnd y)
-      | X86Div x           -> Printf.sprintf "\tdivl\t%s" (opnd x)
+      | X86Div x           -> Printf.sprintf "\tidivl\t%s" (opnd x)
       | X86Push x          -> Printf.sprintf "\tpushl\t%s" (opnd x)
       | X86Pop x           -> Printf.sprintf "\tpopl\t%s" (opnd x)
       | X86Cdq             -> "\tcdq"
@@ -115,28 +115,37 @@ module Compile =
              | S_LD x ->
                 env#local x;
                 let s = allocate env stack in
-                (s::stack, match s with
+                (*(s::stack, match s with
                            | R _ -> [X86Binop ("->", M x, s)]
-                           | _ -> [X86Binop ("->", M x, eax); X86Binop ("->", eax, s)])
+                           | _ -> [X86Binop ("->", M x, eax); X86Binop ("->", eax, s)])*)
+                (s::stack, [X86Binop ("->", M x, eax); X86Binop ("->", eax, s)])
              | S_ST x ->
                 env#local x;
                 let s::stack' = stack in
                 (stack', [X86Binop ("->", s, M x)])
              | S_BINOP o ->
-                (let l::r::stack' = stack in
-                let rec ifnreg (x,y) = match x,y with
-                  | R _, _ | _, R _ -> ([], x)
-                  | _ -> ([X86Binop ("->", x, edx)], edx)
-                in
-                let cmd (x,y) = function
-                  | "+" | "-" -> [X86Binop (o, x, y)]
-                  | "*" -> (match x,y with | _, R _ -> [X86Binop (o, x, y)] | _ -> [X86Binop (o, y, x); X86Binop ("->", x, y)])
-                  | op -> [X86Binop ("->", L 0, eax); X86Binop ("=", x, y); X86Set (o, "al"); X86Binop ("->", eax, y)]
-                in
-                match o with
-                | "/" | "%" -> (r::stack', [X86Binop ("->", r, eax); X86Cdq; X86Div l; X86Binop ("->", (if (o = "/") then eax else edx), r)])
-                | _ -> let (prereq, l') = ifnreg (l, r)
-                       in (r::stack', prereq @ cmd (l', r) (o)))
+                (
+                  let l::r::stack' = stack
+                  in
+                  let rec ifnreg (x,y) = match x,y with
+                    | R _, _ | _, R _ -> ([], x)
+                    | _ -> ([X86Binop ("->", x, ebx)], ebx)
+                  in
+                  let cmd (x,y) = function
+                    | "+" | "-" -> [X86Binop (o, x, y)]
+                    | "*" -> (match x,y with | _, R _ -> [X86Binop (o, x, y)] | _ -> [X86Binop (o, y, x); X86Binop ("->", x, y)])
+                    | op -> [X86Binop ("->", L 0, eax); X86Binop ("=", x, y); X86Set (o, "al"); X86Binop ("->", eax, y)]
+                  in
+                  let cdqo = function
+                    | "/" -> eax
+                    | "%" -> edx
+                  in
+                  match o with
+                  | "/" | "%" -> (r::stack', [X86Binop ("->", r, eax); X86Cdq; X86Div l; X86Binop ("->", cdqo o, r)])
+                  | _ -> let (prereq, l') = ifnreg (l, r)
+                         in
+                         (r::stack', prereq @ cmd (l', r) o)
+                )
              | S_LBL s -> (stack, [X86Lbl s])
              | S_JMP l -> (stack, [X86Jmp l])
              | S_CJMP (c, l) ->

@@ -8,9 +8,17 @@ TESTSI=$(addsuffix .i, $(TESTS))
 TESTSS=$(addsuffix .s, $(TESTS))
 TESTSO=$(addsuffix .o, $(TESTS))
 
-.PHONY: check $(TESTS) $(TESTSI) $(TESTSS) $(TESTSO)
+.PHONY: byte native check int stack x86 $(TESTS) $(TESTSI) $(TESTSS) $(TESTSO)
 
 .DEFAULT_GOAL := check
+
+CMP := byte
+
+byte:
+	@: $(eval export CMP=byte)
+
+native:
+	@: $(eval export CMP=native)
 
 check: $(TESTS)
 
@@ -27,16 +35,16 @@ $(TESTS): %: %.expr
 
 $(TESTSI): %.i: %.expr
 	$(eval FILE:=$(basename $@))
-	cat $(FILE).input | ../rc.byte    $< > $(FILE).log && diff $(FILE).log orig/$(FILE).log
+	cat $(FILE).input | ../rc.$(CMP)    $< > $(FILE).log && diff $(FILE).log orig/$(FILE).log
 
 $(TESTSS): %.s: %.expr
 	$(eval FILE:=$(basename $@))
-	cat $(FILE).input | ../rc.byte -s $< > $(FILE).log && diff $(FILE).log orig/$(FILE).log
+	cat $(FILE).input | ../rc.$(CMP) -s $< > $(FILE).log && diff $(FILE).log orig/$(FILE).log
 
 $(TESTSO): export RUNTIME_O=../runtime/runtime.o
 $(TESTSO): %.o: %.expr
 	$(eval FILE:=$(basename $@))
-	../rc.byte -o $< && cat $(FILE).input | ./$(FILE) > $(FILE).log && diff $(FILE).log orig/$(FILE).log
+	../rc.$(CMP) -o $< && cat $(FILE).input | ./$(FILE) > $(FILE).log && diff $(FILE).log orig/$(FILE).log
 
 clean:
-	rm -f test*.log *.s *~ $(TESTS)
+	rm -f *.log *.s *~ $(TESTS)

@@ -125,6 +125,9 @@ module Compile =
                [S_LBL lbl1] @ expr e @ [S_CJMP ("z", lbl2)] @ stmt' s nv @ [S_JMP lbl1] @ [S_LBL lbl2]
             | If (e, s1, s2) ->
                expr e @ [S_CJMP ("z", lbl2)] @ stmt' s1 nv @ [S_JMP lbl1] @ [S_LBL lbl2] @ stmt' s2 nv @ [S_LBL lbl1])
+        | Repeat (s, e) ->
+           let lbl1 = to_lbl nv in
+           [S_LBL lbl1] @ stmt' s nv @ expr e @ [S_CJMP ("z", lbl1)]
       in
       stmt' ast (new nextVal)
 

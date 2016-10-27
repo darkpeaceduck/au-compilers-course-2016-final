@@ -67,6 +67,7 @@ module Stmt =
       | Assign of string * Expr.t
       | While  of Expr.t * t
       | If     of Expr.t * t * t
+      | Repeat of t * Expr.t
       | Seq    of t * t
 
   ostap (
@@ -88,7 +89,9 @@ module Stmt =
             elif
             (match ele with | None -> Skip | Some s -> s)
           )
-        }
+       }
+      | %"repeat" s:parse %"until" e:expr {Repeat (s, e)}
+      | %"for" i:parse "," c:expr "," s:parse %"do" b:parse %"od" {Seq (i, While (c, Seq (b, s)))}
   )
 
   end

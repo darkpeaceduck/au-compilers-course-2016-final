@@ -1,8 +1,8 @@
 THIS_FILE=$(lastword $(MAKEFILE_LIST))
 
 #TESTS=$(sort $(basename $(wildcard test*.expr)))
-#TESTS=$(sort $(filter-out test011, $(basename $(wildcard test*.expr)))) # funcs (?)
-TESTS=$(sort $(filter-out test011, $(basename $(wildcard test0[01][012345678].expr))) test009) # if + while
+TESTS=$(sort $(filter-out test011, $(basename $(wildcard test*.expr)))) # cycles
+#TESTS=$(sort $(filter-out test011, $(basename $(wildcard test0[01][012345678].expr))) test009) # if + while
 
 TESTSI=$(addsuffix .i, $(TESTS))
 TESTSS=$(addsuffix .s, $(TESTS))
@@ -12,7 +12,7 @@ TESTSO=$(addsuffix .o, $(TESTS))
 
 .DEFAULT_GOAL := check
 
-CMP := byte
+CMP := native
 
 byte:
 	@: $(eval export CMP=byte)

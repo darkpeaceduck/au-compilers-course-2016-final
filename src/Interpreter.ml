@@ -34,6 +34,8 @@ module Stmt =
              eval' c Skip
         | If (e, s1, s2) ->
            eval' c (if (Expr.eval state' e) > 0 then s1 else s2)
+        | (Repeat (s, e)) as st ->
+           eval' (eval' c s) (If (e, Skip, st))
       in
       let (_, _, result) = eval' ([], input, []) stmt in
       result

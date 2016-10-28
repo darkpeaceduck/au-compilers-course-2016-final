@@ -94,7 +94,7 @@ module Show =
 module Compile =
   struct
 
-    open StackMachine.Instructions
+    open StackMachine.Instrs
 
     let stack_program env code =
       let rec compile stack code =

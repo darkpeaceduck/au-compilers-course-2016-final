@@ -1,35 +1,12 @@
 open Ostap
 open Matcher
-
 module Expr =
   struct
-
-    let eval_binop o l r =
-      let bool_to_int = function true -> 1 | _ -> 0 in
-      match o with
-      | "+" -> l + r
-      | "-" -> l - r
-      | "*" -> l * r
-      | "/" -> l / r
-      | "%" -> l mod r
-      | _ ->
-         let e = match o with
-           | "<=" -> l <= r
-           | "<" -> l < r
-           | "==" -> l = r
-           | "!=" -> l <> r
-           | ">=" -> l >= r
-           | ">" -> l > r
-           | "&&" -> (l <> 0) && (r <> 0)
-           | "!!" -> (l <> 0) || (r <> 0)
-         in bool_to_int e
-
     type t =
       | Const of int
       | Var   of string
       | Binop of string * t * t
       | FCall of string * t list
-
   ostap (
     parse:
     !(Ostap.Util.expr
@@ -49,18 +26,14 @@ module Expr =
       )
       primary
     );
-
     primary:
       n:DECIMAL {Const n}
       | f:IDENT args:(-"(" !(Util.list0 parse) -")")? { match args with | None -> Var f | Some args -> FCall (f, args) }
       | -"(" parse -")"                                              
   )
-
   end
-
 module Stmt =
   struct
-
     type t =
       | Skip
       | Read   of string
@@ -68,11 +41,9 @@ module Stmt =
       | Assign of string * Expr.t
       | While  of Expr.t * t
       | If     of Expr.t * t * t
-      | Repeat of t * Expr.t
       | Seq    of t * t
       | FCall  of string * Expr.t list
       | Return of Expr.t
-
   ostap (
     parse: s:simple d:(-";" parse)? {match d with None -> s | Some d -> Seq (s, d)};
     expr: !(Expr.parse);
@@ -93,35 +64,26 @@ module Stmt =
             (match ele with | None -> Skip | Some s -> s)
           )
        }
-      | %"repeat" s:parse %"until" e:expr {Repeat (s, e)}
+      | %"repeat" s:parse %"until" e:expr {Seq (s, While (Binop ("==", e, Const 0), s))}
       | %"for" i:parse "," c:expr "," s:parse %"do" b:parse %"od" {Seq (i, While (c, Seq (b, s)))}
       | %"return" e:expr {Return (e)}
   )
-
   end
-
 module FDef =
   struct
-
     type t = string * string list * Stmt.t
-
     ostap (
       arg: IDENT;
       stmt: !(Stmt.parse);
       parse: %"fun" name:IDENT -"(" args:!(Util.list0 arg) -")" %"begin" body:stmt %"end"
     )
-    
   end
-
 module Prog =
   struct
-
     type t = FDef.t list * Stmt.t
-
     ostap (
       fdef: !(FDef.parse);
       stmt: !(Stmt.parse);
       parse: fdefs:(fdef)* s:stmt
     )
-    
   end

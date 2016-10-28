@@ -6,7 +6,7 @@ check: $(TESTS)
 
 $(TESTS): export RUNTIME_O=../../runtime/runtime.o
 $(TESTS): %: %.expr
-	cat $@.input | ../../rc.native    $< > $@.log && diff $@.log orig/$@.log
+	cat $@.input | ../../rc.native -i $< > $@.log && diff $@.log orig/$@.log
 	cat $@.input | ../../rc.native -s $< > $@.log && diff $@.log orig/$@.log
 	../../rc.native -o $< && cat $@.input | ./$@ > $@.log && diff $@.log orig/$@.log
 

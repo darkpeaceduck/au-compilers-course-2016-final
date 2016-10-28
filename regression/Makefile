@@ -35,7 +35,7 @@ $(TESTS): %: %.expr
 
 $(TESTSI): %.i: %.expr
 	$(eval FILE:=$(basename $@))
-	cat $(FILE).input | ../rc.$(CMP)    $< > $(FILE).log && diff $(FILE).log orig/$(FILE).log
+	cat $(FILE).input | ../rc.$(CMP) -i $< > $(FILE).log && diff $(FILE).log orig/$(FILE).log
 
 $(TESTSS): %.s: %.expr
 	$(eval FILE:=$(basename $@))

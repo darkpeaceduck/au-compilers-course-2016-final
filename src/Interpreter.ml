@@ -1,4 +1,4 @@
-module Env : sig
+4module Env : sig
   type t
   val create_is : int list -> t
   val set_v : t -> string -> int -> t
@@ -26,9 +26,29 @@ end =
     let update_ios (vm, fm, _, _) (_, _, is, os) = (vm, fm, is, os)
   end   
 module Expr : sig
+  val eval_binop : string -> int -> int -> int
   val eval : Env.t -> Language.Expr.t -> Env.t * int
 end =
   struct
+    let eval_binop o l r =
+      let bool_to_int = function true -> 1 | _ -> 0 in
+      match o with
+      | "+" -> l + r
+      | "-" -> l - r
+      | "*" -> l * r
+      | "/" -> l / r
+      | "%" -> l mod r
+      | _ ->
+         let e = match o with
+           | "<=" -> l <= r
+           | "<" -> l < r
+           | "==" -> l = r
+           | "!=" -> l <> r
+           | ">=" -> l >= r
+           | ">" -> l > r
+           | "&&" -> (l <> 0) && (r <> 0)
+           | "!!" -> (l <> 0) || (r <> 0)
+         in bool_to_int e
     open Language.Expr
     let rec eval env = function
       | Const n -> env, n
@@ -45,7 +65,7 @@ end =
                               (env, [])
                               args
          in
-         let env'', ret = (Env.get_f env' name) (Env.clear_vm env') (List.rev values)
+         let env'', ret = (Env.get_f env' name @@ Env.clear_vm env') @@ List.rev values
          in
          Env.update_ios env' env'', ret
   end
@@ -82,7 +102,6 @@ end =
          let env, ret = Expr.eval env e
          in
          eval env (if (ret <> 0) then s1 else s2)
-      | (Repeat (s, e)) as st -> eval env (Seq (s, If (e, Skip, st)))
       | FCall (name, args) ->
          let env, _ = Expr.eval env (Language.Expr.FCall (name, args))
          in

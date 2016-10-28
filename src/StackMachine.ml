@@ -1,7 +1,7 @@
-module Instructions =
+module Instrs =
   struct
 
-    type i =
+    type t =
       | S_READ
       | S_WRITE
       | S_PUSH  of int
@@ -12,23 +12,12 @@ module Instructions =
       | S_JMP   of string
       | S_CJMP  of string * string
                               
-    let debug = function
-      | S_READ -> "S_READ"
-      | S_WRITE -> "S_WRITE"
-      | S_PUSH n -> Printf.sprintf "S_PUSH %d" n
-      | S_LD s -> Printf.sprintf "S_LD %s" s
-      | S_ST s -> Printf.sprintf "S_ST %s" s
-      | S_BINOP s -> Printf.sprintf "S_BINOP %s" s
-      | S_LBL s -> Printf.sprintf "S_LBL %s" s
-      | S_JMP s -> Printf.sprintf "S_JMP %s" s
-      | S_CJMP (s1, s2) -> Printf.sprintf "S_CJMP %s %s" s1 s2
-                                          
   end
           
 module Interpreter =
   struct
 
-    open Instructions
+    open Instrs
     open Language.Expr
            
     let run input code =
@@ -71,7 +60,7 @@ module Interpreter =
 		    ((x, y)::state, stack', input, output, labels)
                  | S_BINOP s ->
 		    let r::l::stack' = stack in
-                    (state, (eval_binop s l r)::stack', input, output, labels)
+                    (state, (Interpreter.Expr.eval_binop s l r)::stack', input, output, labels)
                 )
                 code'
       in
@@ -83,7 +72,7 @@ module Interpreter =
 module Compile =
   struct
 
-    open Instructions
+    open Instrs
     open Language.Expr
     open Language.Stmt
     open Language.FDef
@@ -127,9 +116,6 @@ module Compile =
                [S_LBL lbl1] @ expr e @ [S_CJMP ("z", lbl2)] @ stmt' s nv @ [S_JMP lbl1] @ [S_LBL lbl2]
             | If (e, s1, s2) ->
                expr e @ [S_CJMP ("z", lbl2)] @ stmt' s1 nv @ [S_JMP lbl1] @ [S_LBL lbl2] @ stmt' s2 nv @ [S_LBL lbl1])
-        | Repeat (s, e) ->
-           let lbl1 = to_lbl nv in
-           [S_LBL lbl1] @ stmt' s nv @ expr e @ [S_CJMP ("z", lbl1)]
       in
       stmt' ast (new nextVal)
 

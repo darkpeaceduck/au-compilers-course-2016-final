@@ -1,9 +1,9 @@
 MKDIR ?= mkdir -vp
 CP    ?= cp
 
-OB=ocamlbuild -use-ocamlfind -plugin-tag "package(str)" -classic-display
+OB=ocamlbuild -use-ocamlfind -classic-display -quiet -no-hygiene
 ifdef OBV
-OB += -verbose 6
+OB += -verbose 1
 endif
 
 BYTE_TARGETS=src/rc.byte 
@@ -13,13 +13,16 @@ NATIVE_TARGETS=src/rc.native
 
 .DEFAULT_GOAL: all
 
-all: main runtime
+all: main runtime success
 
 runtime:
-	cd runtime && make all && cd ..
+	@cd runtime && make -s all && cd ..
 
 main:
 	$(OB) -Is src $(BYTE_TARGETS) $(NATIVE_TARGETS)
+
+success:
+	@echo "===== SUCCESS ====="
 
 clean: 
 	cd runtime && make clean && cd .. && $(RM) -r _build *.log  *.native *.byte

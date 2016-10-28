@@ -28,6 +28,7 @@ module Expr =
       | Const of int
       | Var   of string
       | Binop of string * t * t
+      | FCall of string * t list
 
   ostap (
     parse:
@@ -51,7 +52,7 @@ module Expr =
 
     primary:
       n:DECIMAL {Const n}
-      | f:IDENT args:(-"(" !(Util.list0 parse) -")")? {match args with | None -> Var f}
+      | f:IDENT args:(-"(" !(Util.list0 parse) -")")? { match args with | None -> Var f | Some args -> FCall (f, args) }
       | -"(" parse -")"                                              
   )
 
@@ -69,12 +70,14 @@ module Stmt =
       | If     of Expr.t * t * t
       | Repeat of t * Expr.t
       | Seq    of t * t
+      | FCall  of string * Expr.t list
+      | Return of Expr.t
 
   ostap (
     parse: s:simple d:(-";" parse)? {match d with None -> s | Some d -> Seq (s, d)};
     expr: !(Expr.parse);
     simple:
-      x:IDENT ":=" e:expr {Assign (x, e)}
+      x:IDENT s:(":=" e:expr {Assign (x, e)} | "(" args:!(Util.list0 expr) ")" {FCall (x, args)}) {s}
       | %"read" "(" x:IDENT ")" {Read x}
       | %"write" "(" e:expr ")" {Write e}
       | %"skip" {Skip}
@@ -92,6 +95,33 @@ module Stmt =
        }
       | %"repeat" s:parse %"until" e:expr {Repeat (s, e)}
       | %"for" i:parse "," c:expr "," s:parse %"do" b:parse %"od" {Seq (i, While (c, Seq (b, s)))}
+      | %"return" e:expr {Return (e)}
   )
 
+  end
+
+module FDef =
+  struct
+
+    type t = string * string list * Stmt.t
+
+    ostap (
+      arg: IDENT;
+      stmt: !(Stmt.parse);
+      parse: %"fun" name:IDENT -"(" args:!(Util.list0 arg) -")" %"begin" body:stmt %"end"
+    )
+    
+  end
+
+module Prog =
+  struct
+
+    type t = FDef.t list * Stmt.t
+
+    ostap (
+      fdef: !(FDef.parse);
+      stmt: !(Stmt.parse);
+      parse: fdefs:(fdef)* s:stmt
+    )
+    
   end

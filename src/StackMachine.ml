@@ -86,6 +86,8 @@ module Compile =
     open Instructions
     open Language.Expr
     open Language.Stmt
+    open Language.FDef
+    open Language.Prog
 
     let rec expr = function
     | Var   x -> [S_LD   x]
@@ -130,5 +132,7 @@ module Compile =
            [S_LBL lbl1] @ stmt' s nv @ expr e @ [S_CJMP ("z", lbl1)]
       in
       stmt' ast (new nextVal)
+
+    let prog (fdefs, s) = stmt s
 
   end

@@ -5,7 +5,7 @@ let parse infile =
   Util.parse
     (object
        inherit Matcher.t s
-       inherit Util.Lexers.ident ["read"; "write"; "skip"; "if"; "then"; "elif"; "else"; "fi"; "while"; "do"; "od"; "repeat"; "until"; "for"] s
+       inherit Util.Lexers.ident ["read"; "write"; "skip"; "if"; "then"; "elif"; "else"; "fi"; "while"; "do"; "od"; "repeat"; "until"; "for"; "fun"; "begin"; "end"; "return"] s
        inherit Util.Lexers.decimal s
        inherit Util.Lexers.skip [
 	 Matcher.Skip.whitespaces " \t\n";
@@ -14,7 +14,7 @@ let parse infile =
        ] s
      end
     )
-    (ostap (!(Language.Stmt.parse) -EOF))
+    (ostap (!(Language.Prog.parse) -EOF))
 
 let main = ()
   try
@@ -28,11 +28,11 @@ let main = ()
       | _    -> `Int, Sys.argv.(1)
     in
     match parse filename with
-    | `Ok stmt -> 
+    | `Ok prog -> 
 	(match mode with
 	 | `X86 ->
              let basename = Filename.chop_suffix filename ".expr" in 
-	     X86.build stmt basename
+	     X86.build prog basename
 	 | _ ->
 	     let rec read acc =
 	       try
@@ -44,15 +44,15 @@ let main = ()
 	     let input = read [] in
 	     let output =
 	       match mode with
-	       | `SM -> StackMachine.Interpreter.run input (StackMachine.Compile.stmt stmt)
+	       | `SM -> StackMachine.Interpreter.run input (StackMachine.Compile.prog prog)
                | `DebugSM -> [0]
-	       | _   -> Interpreter.Stmt.eval input stmt
+	       | _   -> Interpreter.Prog.eval input prog
 	     in
              match mode with
-             | `DebugSM -> List.iter (fun i -> Printf.printf "%s\n" (StackMachine.Instructions.debug i)) (StackMachine.Compile.stmt stmt)
+             | `DebugSM -> List.iter (fun i -> Printf.printf "%s\n" (StackMachine.Instructions.debug i)) (StackMachine.Compile.prog prog)
 	     | _ -> List.iter (fun i -> Printf.printf "%d\n" i) output
 	)
 
-    | `Fail er -> Printf.eprintf "%s" er
+    | `Fail er -> Printf.eprintf "Parse error: %s" er
   with 
   | Invalid_argument _ -> Printf.printf "Usage: rc.byte <name.expr>"

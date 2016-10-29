@@ -1,5 +1,6 @@
 open Ostap
 open Matcher
+(* все открыто, потому что непонятны типы в Ostap'e *)
 module Expr =
   struct
     type t =
@@ -45,7 +46,7 @@ module Stmt =
       | FCall  of string * Expr.t list
       | Return of Expr.t
   ostap (
-    parse: s:simple d:(-";" parse)? {match d with None -> s | Some d -> Seq (s, d)};
+    parse: s:simple d:(-";" parse?)? {match d with | None | Some None -> s | Some (Some d) -> Seq (s, d)};
     expr: !(Expr.parse);
     simple:
       x:IDENT s:(":=" e:expr {Assign (x, e)} | "(" args:!(Util.list0 expr) ")" {FCall (x, args)}) {s}
@@ -84,6 +85,6 @@ module Prog =
     ostap (
       fdef: !(FDef.parse);
       stmt: !(Stmt.parse);
-      parse: fdefs:(fdef)* s:stmt
+      parse: fdefs:(fdef)* main:stmt
     )
   end

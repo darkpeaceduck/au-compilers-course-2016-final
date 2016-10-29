@@ -49,8 +49,8 @@ end =
            | "&&" -> (l <> 0) && (r <> 0)
            | "!!" -> (l <> 0) || (r <> 0)
          in bool_to_int e
-    open Language.Expr
-    let rec eval env = function
+    let rec eval env (expr : Language.Expr.t) =
+      match expr with
       | Const n -> env, n
       | Var x -> env, Env.get_v env x
       | Binop (o, l, r) ->
@@ -60,21 +60,21 @@ end =
          in
          env, eval_binop o retl retr
       | FCall (name, args) ->
-         let env', values = List.fold_left
+         let env, values = List.fold_left
                               (fun (env, values) arg -> let env, ret = eval env arg in (env, ret::values))
                               (env, [])
                               args
          in
-         let env'', ret = (Env.get_f env' name @@ Env.clear_vm env') @@ List.rev values
+         let env', ret = (Env.get_f env name @@ Env.clear_vm env) @@ List.rev values
          in
-         Env.update_ios env' env'', ret
+         Env.update_ios env env', ret
   end
 module Stmt : sig
   val eval : Env.t -> Language.Stmt.t -> Env.t * int option
 end =
-  struct 
-    open Language.Stmt
-    let rec eval env = function
+  struct
+    let rec eval env (stmt : Language.Stmt.t) =
+      match stmt with
       | Skip -> env, None
       | Seq (l, r) ->
          let (env, ret) as res = eval env l
@@ -114,9 +114,8 @@ end =
 module Prog : sig
   val eval : int list -> Language.Prog.t -> int list
 end =
-  struct  
-    open Language.Prog
-    let eval input (fdefs, stmt) =
+  struct
+    let eval input (fdefs, main) =
       let to_exec_f (name, args, body) = fun env values ->
         let env = List.fold_left
                     (fun env (a, v) -> Env.set_v env a v)
@@ -132,7 +131,7 @@ end =
                   (Env.create_is input)
                   fdefs
       in
-      let env, _ = Stmt.eval env stmt
+      let env, _ = Stmt.eval env main
       in
       Env.get_os env
   end

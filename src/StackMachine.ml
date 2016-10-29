@@ -1,26 +1,26 @@
 module Instrs =
   struct
-
     type t =
       | S_READ
       | S_WRITE
-      | S_PUSH  of int
-      | S_LD    of string
-      | S_ST    of string
+      | S_PUSH of int
+      | S_LD of string (* put arg value on top of the stack *)
+      | S_ST of string (* take value from top of the stack to the var *)
       | S_BINOP of string
-      | S_LBL   of string
-      | S_JMP   of string
-      | S_CJMP  of string * string
-                              
+      | S_LBL of string
+      | S_JMP of string
+      | S_CJMP of string * string
+      | S_CALL of string * string list
+      | S_RET
+      | S_END
   end
-          
-module Interpreter =
+module Interpreter : sig
+  val run : int list -> Instrs.t list -> int list
+end =
   struct
-
-    open Instrs
-    open Language.Expr
+    let run input code = [0; 0; 0;]
            
-    let run input code =
+    (*let run input code =
       let rec pre code =
         match code with
         | [] -> ([], [])
@@ -66,17 +66,18 @@ module Interpreter =
       in
       let (labels, code') = pre code in
        run' ([], [], input, [], labels) code'
-	   
+     *)
+
   end
-
-module Compile =
+module Compile : sig
+  val prog : Language.Prog.t -> Instrs.t list
+end =
   struct
-
-    open Instrs
+    
+    (*open Instrs
     open Language.Expr
     open Language.Stmt
     open Language.FDef
-    open Language.Prog
 
     let rec expr = function
     | Var   x -> [S_LD   x]
@@ -100,7 +101,7 @@ module Compile =
     end
          
     let stmt ast =
-      let to_lbl nv = Printf.sprintf "lb%d" (nv#next) in
+      let to_lbl nv = Printf.sprintf "cycle_lbl%d" (nv#next) in
       let rec stmt' ast nv =
         match ast with
         | Skip          -> []
@@ -117,8 +118,36 @@ module Compile =
             | If (e, s1, s2) ->
                expr e @ [S_CJMP ("z", lbl2)] @ stmt' s1 nv @ [S_JMP lbl1] @ [S_LBL lbl2] @ stmt' s2 nv @ [S_LBL lbl1])
       in
-      stmt' ast (new nextVal)
+      stmt' ast (new nextVal)*)
 
-    let prog (fdefs, s) = stmt s
-
+    open Instrs (* //TODO ? , function otherwise*)
+    let rec expr expr =
+      match expr with
+      | Var x -> [S_LD x]
+      | Const n -> [S_PUSH n]
+      | Binop (o, l, r) ->
+         (let (l', r') = (expr l, expr r) in
+          match o with
+          | "&&" | "!!" -> (* //TODO переписать в x86 для ускорения *)
+             let nesum = [S_PUSH 0] @ l' @ [S_BINOP "!="] @ [S_PUSH 0] @ r' @ [S_BINOP "!="] @ [S_BINOP "+"] in
+             (match o with
+              | "&&" -> [S_PUSH 2] @ nesum @ [S_BINOP "=="]
+              | _ -> [S_PUSH 0] @ nesum @ [S_BINOP "<"])
+          | _ -> l' @ r' @ [S_BINOP o])
+      | FCall (name, args) ->
+         let s_push_args = List.map (fun arg -> expr arg) args
+         in
+         s_push_args @ [S_CALL]
+    let stmt stmt = [S_RET]
+    let fdef (name, args, body) =
+      let s_pop_args = List.map (fun arg -> S_ST arg) args
+      in
+      [S_LBL name] @ s_pop_args @ (stmt body)
+    let prog (fdefs, main) =
+      let s_fdefs = List.fold_left
+                      (fun s_fdefs fdef' -> s_fdefs @ (fdef fdef'))
+                      []
+                      fdefs
+      in
+      s_fdefs @ (stmt main) @ [S_END]
   end

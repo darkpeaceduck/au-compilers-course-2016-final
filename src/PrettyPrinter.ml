@@ -6,8 +6,8 @@ end =
   struct
     let prog _ = Printf.printf "Not finished yet. Implement it at src/PrettyPrinter.ml, if needed.\n"
     let ints l = List.iter (fun i -> Printf.printf "%d\n" i) l
-    open StackMachine.Instrs
-    let instr = function
+    let instr (instr : StackMachine.Instrs.t) =
+      match instr with
       | S_READ -> "S_READ"
       | S_WRITE -> "S_WRITE"
       | S_PUSH n -> Printf.sprintf "S_PUSH %d" n

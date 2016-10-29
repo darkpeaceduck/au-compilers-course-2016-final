@@ -1,6 +1,6 @@
 THIS_FILE=$(lastword $(MAKEFILE_LIST))
 
-TESTS=$(sort $(basename $(wildcard test*.expr)))
+TESTS=$(sort $(basename $(wildcard test*.expr))) $(sort $(basename $(wildcard mtest*.expr))) # all
 #TESTS=$(sort $(filter-out test011, $(basename $(wildcard test*.expr)))) # cycles
 #TESTS=$(sort $(filter-out test011, $(basename $(wildcard test0[01][012345678].expr))) test009) # if + while
 

@@ -1,0 +1,6 @@
+fun sum(a, b)
+begin
+    return a + b
+end
+
+write(sum(sum(4, 6), sum(3, 7)))

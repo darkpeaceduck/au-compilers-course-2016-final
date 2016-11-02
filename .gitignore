@@ -1,22 +1,12 @@
+# test logs and outputs
 test[0-9]*
 test*.s
 test*.log
 generated[0-9]*
 generated*.s
 generated*.log
-.gitignore~
-*.annot
-*.cmi
-*.cmo
-*.o
-*.cmx
-rc.*
-autom4te.cache/
-src/.depend
-src/META
-src/*#*
-*~
 regression/performance/data.gnuplot
 regression/performance/names.data
 regression/performance/*.log
+# build
 _build/

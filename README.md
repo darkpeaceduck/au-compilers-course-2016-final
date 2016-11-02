@@ -5,4 +5,5 @@ What we have so far:
 
 * binops
 * if/while/for/repeat control flows
-# funcs
+* funcs
+

@@ -19,6 +19,9 @@ runtime:
 	@cd runtime && make -s all && cd ..
 
 main:
+	$(OB) -Is src $(BYTE_TARGETS) $(NATIVE_TARGETS)
+
+old:
 	@mkdir -p _build
 	@$(OB) -Is src $(BYTE_TARGETS) $(NATIVE_TARGETS) >_build/.error || true
 	@$(OB) -Is src $(BYTE_TARGETS) $(NATIVE_TARGETS)

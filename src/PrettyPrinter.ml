@@ -11,11 +11,20 @@ end =
       | S_READ -> "S_READ"
       | S_WRITE -> "S_WRITE"
       | S_PUSH n -> Printf.sprintf "S_PUSH %d" n
-      | S_LD s -> Printf.sprintf "S_LD %s" s
-      | S_ST s -> Printf.sprintf "S_ST %s" s
-      | S_BINOP s -> Printf.sprintf "S_BINOP %s" s
-      | S_LBL s -> Printf.sprintf "S_LBL %s" s
-      | S_JMP s -> Printf.sprintf "S_JMP %s" s
-      | S_CJMP (s1, s2) -> Printf.sprintf "S_CJMP %s %s" s1 s2
-    let instrs l = List.iter (fun i -> Printf.printf "%s\n" (instr i)) l
+      | S_LD s -> "S_LD " ^ s
+      | S_ST s -> "S_ST " ^ s
+      | S_BINOP s -> "S_BINOP " ^ s
+      | S_LBL s -> "S_LBL " ^ s
+      | S_JMP s -> "S_JMP " ^ s
+      | S_CJMP (s1, s2) -> "S_CJMP " ^ s1 ^ " " ^ s2
+      | S_CALL (name, args) -> "S_CALL " ^ (String.concat " " (name::args))
+      | S_RET -> "S_RET"
+      | S_END -> "S_END"
+    let instrs l =
+      (*let labels, returns, code = StackMachine.Interpreter.preprocess l
+      in
+      StackMachine.Ms.iter (fun k ((i, n)::_) -> Printf.printf "%s -> (%s, %d)::_\n" k (instr i) n) labels;
+      StackMachine.Mi.iter (fun k ((i, n)::_) -> Printf.printf "%d -> (%s, %d)::_\n" k (instr i) n) returns;
+      List.iter (fun (i, n) -> Printf.printf "(%s, %d)\n" (instr i) n) code*)
+      List.iter (fun i -> Printf.printf "%s\n" (instr i)) l
   end

@@ -1,32 +1,5 @@
-open Ostap
-(* все открыто, потому что непонятны типы в Ostap'e *)
-module Parser =
-  struct
-    let parse infile =
-      let s = Util.read infile
-      in
-      Util.parse
-        (object
-           inherit Matcher.t s
-           inherit Util.Lexers.ident
-                     ["read"; "write"; "skip"; (* basic *)
-                      "if"; "then"; "elif"; "else"; "fi"; (* if *)
-                      "while"; "do"; "od"; "repeat"; "until"; "for"; (* loop *)
-                      "fun"; "begin"; "end"; "return"] (* fun *)
-                     s
-           inherit Util.Lexers.decimal s
-           inherit Util.Lexers.skip [
-	               Matcher.Skip.whitespaces " \t\n";
-	               Matcher.Skip.lineComment "--";
-	               Matcher.Skip.nestedComment "(*" "*)"
-                     ] s
-         end
-        )
-        (ostap (!(Language.Prog.parse) -EOF))
-  end
 let main =
-  ()
-    try
+  () try
       let mode, filename =
         match Sys.argv.(1) with
         | "-p" -> `Parse, Sys.argv.(2) (* -p : print ast *)
@@ -38,7 +11,7 @@ let main =
         | "-o" -> `X86, Sys.argv.(2) (* -o : x86 compile and interpret *)
         | _ -> failwith "No such flag. It is necessary to specify the type of compiling."
       in
-      match Parser.parse filename with
+      match Parser.File.parse filename with
       | `Ok prog -> 
 	 (match mode with
 	  | `X86 ->

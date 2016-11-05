@@ -1,6 +1,6 @@
 module Env : sig
   type t
-  val create_is : int list -> t
+  val init : int list -> t
   val set_v : t -> string -> int -> t
   val get_v : t -> string -> int                      
   val clear_vm : t -> t
@@ -13,8 +13,9 @@ module Env : sig
 end =
   struct
     module M = Map.Make (String)
+    (* variable map * func map * input stream * output stream *)
     type t = int M.t * (t -> int list -> t * int) M.t * int list * int list
-    let create_is is = (M.empty, M.empty, is, [])
+    let init is = (M.empty, M.empty, is, [])
     let set_v (vm, fm, is, os) kv v = (M.add kv v vm, fm, is, os)
     let get_v (vm, _, _, _) kv = M.find kv vm
     let clear_vm (_, fm, is, os) = (M.empty, fm, is, os)
@@ -49,7 +50,8 @@ end =
            | "&&" -> (l <> 0) && (r <> 0)
            | "!!" -> (l <> 0) || (r <> 0)
          in bool_to_int e
-    let rec eval env (expr : Language.Expr.t) =
+    open Language.Expr
+    let rec eval env expr =
       match expr with
       | Const n -> env, n
       | Var x -> env, Env.get_v env x
@@ -61,9 +63,9 @@ end =
          env, eval_binop o retl retr
       | FCall (name, args) ->
          let env, values = List.fold_left
-                              (fun (env, values) arg -> let env, ret = eval env arg in (env, ret::values))
-                              (env, [])
-                              args
+                             (fun (env, values) arg -> let env, ret = eval env arg in (env, ret::values))
+                             (env, [])
+                             args
          in
          let env', ret = (Env.get_f env name @@ Env.clear_vm env) @@ List.rev values
          in
@@ -73,7 +75,8 @@ module Stmt : sig
   val eval : Env.t -> Language.Stmt.t -> Env.t * int option
 end =
   struct
-    let rec eval env (stmt : Language.Stmt.t) =
+    open Language.Stmt
+    let rec eval env stmt =
       match stmt with
       | Skip -> env, None
       | Seq (l, r) ->
@@ -128,7 +131,7 @@ end =
       in
       let env = List.fold_left
                   (fun env ((name, _, _) as fdef) -> Env.set_f env name @@ to_exec_f fdef)
-                  (Env.create_is input)
+                  (Env.init input)
                   fdefs
       in
       let env, _ = Stmt.eval env main

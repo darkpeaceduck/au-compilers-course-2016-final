@@ -1,0 +1,11 @@
+fun fac(n)
+begin
+    if n == 0 then
+        return 1
+    else
+        return n * fac(n - 1)
+    fi
+end
+
+read(x);
+write(fac(x));

@@ -3,4 +3,4 @@ begin
     return a + b
 end
 
-write(sum(sum(4, 6), sum(3, 7)))
+write(sum(9, 11));

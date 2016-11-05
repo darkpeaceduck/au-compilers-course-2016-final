@@ -10,3 +10,10 @@ regression/performance/names.data
 regression/performance/*.log
 # build
 _build/
+# emacs
+*~
+\#*
+# exec
+rc.byte
+rc.native
+runtime/runtime.o

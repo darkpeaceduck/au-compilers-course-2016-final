@@ -1,3 +1,11 @@
+(* ПОСЛЕ X86 *)
+(* //TODO переписать !! and && в x86 для ускорения *)
+(* //TODO избавиться от второго аругмента в call на стадии fdefs *)
+(* //TODO чистить стэк после вызова функции как процедуры *)
+(* //TODO HashMap instead of Map  *)
+(* //TODO ??? *)
+(* //TODO сделать рефакторинг *)
+
 type opnd = R of int | S of int | M of string | L of int
 
 let x86regs = [|

@@ -21,10 +21,5 @@ end =
       | S_RET -> "S_RET"
       | S_END -> "S_END"
     let instrs l =
-      (*let labels, returns, code = StackMachine.Interpreter.preprocess l
-      in
-      StackMachine.Ms.iter (fun k ((i, n)::_) -> Printf.printf "%s -> (%s, %d)::_\n" k (instr i) n) labels;
-      StackMachine.Mi.iter (fun k ((i, n)::_) -> Printf.printf "%d -> (%s, %d)::_\n" k (instr i) n) returns;
-      List.iter (fun (i, n) -> Printf.printf "(%s, %d)\n" (instr i) n) code*)
       List.iter (fun i -> Printf.printf "%s\n" (instr i)) l
   end

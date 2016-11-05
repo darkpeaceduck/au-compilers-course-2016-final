@@ -1,6 +1,3 @@
-(* //TODO переписать !! and && в x86 для ускорения *)
-(* //TODO иззбавиться от второго аругмента в call на стадии fdefs *)
-(* //TODO чистить стэк после вызова функции как процедуры *)
 module Instrs =
   struct
     type t =
@@ -17,128 +14,102 @@ module Instrs =
       | S_RET
       | S_END
   end
-module Ms = Map.Make (String)
-module Mi = Map.Make (struct type t = int let compare = compare end)
 module Lbl =
   struct
     let to_lbl v = Printf.sprintf "lbl%d" v
   end
 module Interpreter : sig
-  val preprocess : Instrs.t list -> (Instrs.t * int) list Ms.t * (Instrs.t * int) list Mi.t * (Instrs.t * int) list
   val run : int list -> Instrs.t list -> int list
 end =
   struct
-    module Env : sig
-      type t
-      val init : (Instrs.t * int) list Ms.t -> (Instrs.t * int) list Mi.t -> int list -> t
-      val read : t -> t
-      val write : t -> t
-      val push : t -> int -> t
-      val pop : t -> t * int
-      val ld : t -> string -> t
-      val st : t -> string -> t
-      val binop : t -> string -> t
-      val goto_l : t -> string -> (Instrs.t * int) list
-      val goto_n : t -> int -> (Instrs.t * int) list
-      val ret : t -> int * int * t
-      val new_frame : t -> t
-      val get_os : t -> int list
-    end =
-      struct
-        (* stack frames * labels map * returns map * stack * input stream * output stream *)
-        type t = int Ms.t list * (Instrs.t * int) list Ms.t * (Instrs.t * int) list Mi.t * int list * int list * int list
-        let init labels returns is = ([Ms.empty], labels, returns, [], is, [])
-        let read (sf, lm, nm, st, i::is, os) = (sf, lm, nm, i::st, is, os)
-        let write (sf, lm, nm, x::st, is, os) = (sf, lm, nm, st, is, x::os)
-        let push (sf, lm, nm, st, is, os) x = (sf, lm, nm, x::st, is, os)
-        let pop (sf, lm, nm, x::st, is, os) = (sf, lm, nm, st, is, os), x
-        let ld ((vm::_) as sf, lm, nm, st, is, os) x = (sf, lm, nm, (Ms.find x vm)::st, is, os)
-        let st (vm::sf, lm, nm, y::st, is, os) x = ((Ms.add x y vm)::sf, lm, nm, st, is, os)
-        let binop (sf, lm, nm, r::l::st, is, os) o = (sf, lm, nm, (Interpreter.Expr.eval_binop o l r)::st, is, os)
-        let goto_l (_, lm, _, _, _, _) l = Ms.find l lm
-        let goto_n (_, _, nm, _, _, _) n = Mi.find n nm
-        let ret (_::sf, lm, nm, r::v::st, is, os) = r, v, (sf, lm, nm, st, is, os)
-        let new_frame (sf, lm, nm, st, is, os) = (Ms.empty::sf, lm, nm, st, is, os)
-        let get_os (_, _, _, _, _, os) = List.rev os
-      end
+    module M = Map.Make (String)
+    class env code labels input = object
+      val cn : Instrs.t array = Array.of_list code (* Instrs.t array of stack machine *)
+      val lm : int M.t = labels (* labels to line number map *)
+      val mutable sf : int M.t list = [M.empty] (* stack frames list *)
+      val mutable st : int list = [] (* stack *)
+      val mutable is : int list = input (* input stream *)
+      val mutable os : int list = [] (* output stream *)
+      method get_ci ln  = if ln < Array.length cn then Some cn.(ln) else None
+      method read = let i::is' = is in st <- i::st; is <- is'
+      method write = let i::st' = st in st <- st'; os <- i::os
+      method push n = st <- n::st
+      method ld x = let vm::_ = sf in st <- (M.find x vm)::st
+      method st x = let (vm::sf', y::st') = (sf, st) in sf <- (M.add x y vm)::sf'; st <- st'
+      method binop o = let r::l::st' = st in st <- (Interpreter.Expr.eval_binop o l r)::st'
+      method pop = let i::st' = st in st <- st'; i
+      method new_frame = sf <- M.empty::sf
+      method del_frame = let _::sf' = sf in sf <- sf'
+      method goto l = M.find l lm
+      method get_os = List.rev os
+    end
     open Instrs
     let preprocess code =
-      let rec labels n = function
-        | [] -> Ms.empty, []
+      let rec labels ln = function
+        | [] -> [], M.empty
         | i::code' ->
-           let n' =
+           let ln' =
              match i with
-             | S_LBL _ -> n
-             | _ -> n + 1
+             | S_LBL _ -> ln
+             | _ -> ln + 1
            in
-           let labels, code = labels n' code'
-           in
-           match i with
-           | S_LBL s -> Ms.add s code labels, code
-           | _ -> labels, (i, n)::code
-      in
-      let labels, code = labels 0 code
-      in
-      let rec returns = function
-        | [] -> Mi.empty
-        | (i, n)::code' ->
-           let returns = returns code'
+           let code, labels = labels ln' code'
            in
            match i with
-           | S_CALL _ -> Mi.add (n + 1) code' returns
-           | _ -> returns
+           | S_LBL l -> code, M.add l ln labels
+           | _ -> i::code, labels
       in
-      let returns = returns code
-      in
-      labels, returns, code
+      labels 0 code
     let run input code =
-      let labels, returns, code = preprocess code   
+      let code, labels = preprocess code   
       in
-      let rec run' env = function
-        | [] -> env
-        | (i, linum)::code' ->
+      let env = new env code labels input
+      in
+      let rec run' ln =
+        let io = env#get_ci ln
+        in
+        match io with
+        | None -> ()
+        | Some i ->
            match i with
-           | S_JMP l -> run' env @@ Env.goto_l env l
+           | S_JMP l -> run' @@ env#goto l
            | S_CJMP (c, l) ->
-              let env, x = Env.pop env
+              let x = env#pop
               in
               let d =
                 match c with
                 | "z" -> x = 0
                 | "nz" -> x <> 0
               in
-              run' env (if d then Env.goto_l env l else code')
+              run' @@ if d then env#goto l else (ln + 1)
            | S_CALL (name, args) ->
-              let env = Env.new_frame env
-              in
-              let env = List.fold_left
-                          (fun env arg -> Env.st env arg)
-                          env
-                          args
-              in
-              let env = Env.push env (linum + 1)
-              in
-              run' env @@ Env.goto_l env name
+              env#new_frame;
+              (List.iter
+                 (fun arg -> env#st arg)
+                 args);
+              env#push (ln + 1);
+              run' @@ env#goto name
            | S_RET ->
-              let ret, num, env = Env.ret env
+              env#del_frame;
+              let rv = env#pop
               in
-              let env = Env.push env ret
+              let rln = env#pop
               in
-              run' env @@ Env.goto_n env num
-           | S_END -> env
+              env#push rv;
+              run' rln
+           | S_END -> ()
            | _ ->
-              let env =
-                match i with
-                | S_READ -> Env.read env
-                | S_WRITE -> Env.write env
-                | S_PUSH n -> Env.push env n
-                | S_LD x -> Env.ld env x
-                | S_ST x -> Env.st env x
-                | S_BINOP o -> Env.binop env o
-              in
-              run' env code'
+              (match i with
+               | S_READ -> env#read
+               | S_WRITE -> env#write
+               | S_PUSH n -> env#push n
+               | S_LD x -> env#ld x
+               | S_ST x -> env#st x
+               | S_BINOP o -> env#binop o);
+              run' (ln + 1)
       in
-      Env.get_os @@ run' (Env.init labels returns input) @@ Ms.find "main" labels
+      run' @@ env#goto "main";
+      env#get_os
   end
 module Compile : sig
   val prog : Language.Prog.t -> Instrs.t list

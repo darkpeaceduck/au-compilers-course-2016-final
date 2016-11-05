@@ -1,12 +1,12 @@
-# include <stdio.h>
+#include <stdio.h>
 
-extern int read () {
+extern int read(){
   int d;
-  printf ("> ");
-  scanf ("%d", &d);
+  printf("> ");
+  scanf("%d", &d);
   return d;
 }
 
-extern void write (int x) {
-  printf ("%d\n", x);
+extern void write(int x){
+  printf("%d\n", x);
 }

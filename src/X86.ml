@@ -160,6 +160,7 @@ module Compile =
              | S_CJMP (c, l) ->
                 let s::stack' = stack in
                 (stack', [X86Binop ("->", s, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)])
+             | _ -> (stack, [])
            in
 	   x86code @ compile stack' code'
       in
@@ -205,4 +206,5 @@ let build stmt name =
   Printf.fprintf outf "%s" (compile stmt);
   close_out outf;
   let runtime_o = (try Sys.getenv "RUNTIME_O" with | Not_found -> failwith "Please, provide a runtime.o file!") in
-  ignore (Sys.command (Printf.sprintf "gcc -m32 -o %s %s %s.s" name runtime_o name))
+  let gcc_flags = "-Ofast" in
+  ignore (Sys.command (Printf.sprintf "gcc %s -m32 -o %s %s %s.s" gcc_flags name runtime_o name))

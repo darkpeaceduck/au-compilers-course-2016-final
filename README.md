@@ -3,7 +3,8 @@
 Implementing a simple language.
 What we have so far:
 
-* binops
-* if/while/for/repeat control flows
-* funcs
-
+                                  | Intrepreter | Stack Machine | x86 |
+--------------------------------- | ----------- | ------------- | --- |
+binops                            | [x]         | [x]           | [x] |
+if/while/for/repeat control flows | [x]         | [x]           | [x] |
+funcs                             | [x]         | [x]           | [ ] |

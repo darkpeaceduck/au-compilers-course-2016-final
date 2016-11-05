@@ -5,6 +5,7 @@
 (* //TODO HashMap instead of Map  *)
 (* //TODO ??? *)
 (* //TODO сделать рефакторинг *)
+(* //TODO перепройти все тесты *)
 
 type opnd = R of int | S of int | M of string | L of int
 

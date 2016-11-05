@@ -16,7 +16,7 @@ module Instrs =
   end
 module Lbl =
   struct
-    let to_lbl v = Printf.sprintf "lbl%d" v
+    let to_lbl v = Printf.sprintf "_lbl%d" v
   end
 module Interpreter : sig
   val run : int list -> Instrs.t list -> int list
@@ -108,7 +108,7 @@ end =
                | S_BINOP o -> env#binop o);
               run' (ln + 1)
       in
-      run' @@ env#goto "main";
+      run' 0;
       env#get_os
   end
 module Compile : sig
@@ -178,5 +178,5 @@ end =
                       []
                       fdefs
       in
-      s_fdefs @ [S_LBL "main"] @ (stmt main) @ [S_END]
+      [S_JMP "main"] @ s_fdefs @ [S_LBL "main"] @ (stmt main) @ [S_END]
   end

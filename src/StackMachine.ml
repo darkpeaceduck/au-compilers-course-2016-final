@@ -19,7 +19,7 @@ module Lbl =
     let to_lbl v = Printf.sprintf "_lbl%d" v
   end
 module Interpreter : sig
-  val run : int list -> Instrs.t list -> int list
+  val run : int list -> (string * string list * Instrs.t list) list * Instrs.t list -> int list
 end =
   struct
     module M = Map.Make (String)
@@ -60,7 +60,14 @@ end =
            | _ -> i::code, labels
       in
       labels 0 code
-    let run input code =
+    let run input (s_fdefs, s_main) =
+      let fdefs_code = List.fold_left
+                         (fun fdefs_code (name, _, s_body) -> fdefs_code @ (S_LBL name)::s_body)
+                         []
+                         s_fdefs
+      in
+      let code = [S_JMP "main"] @ fdefs_code @ [S_LBL "main"] @ s_main
+      in
       let code, labels = preprocess code   
       in
       let env = new env code labels input
@@ -112,7 +119,7 @@ end =
       env#get_os
   end
 module Compile : sig
-  val prog : Language.Prog.t -> Instrs.t list
+  val prog : Language.Prog.t -> (string * string list * Instrs.t list) list * Instrs.t list
 end =
   struct
     module M = Map.Make (String)
@@ -171,12 +178,11 @@ end =
         | FCall (name, args) -> expr @@ Language.Expr.FCall (name, args)
         | Return e -> expr e @ [S_RET]
       in
-      let fdef (name, _, body) = [S_LBL name] @ (stmt body)
+      let fdef (name, args, body) = name, args, stmt body
       in
-      let s_fdefs = List.fold_left
-                      (fun s_fdefs fdef' -> s_fdefs @ (fdef fdef'))
-                      []
+      let s_fdefs = List.map
+                      (fun fdef' -> fdef fdef')
                       fdefs
       in
-      [S_JMP "main"] @ s_fdefs @ [S_LBL "main"] @ (stmt main) @ [S_END]
+      s_fdefs, (stmt main) @ [S_END]
   end

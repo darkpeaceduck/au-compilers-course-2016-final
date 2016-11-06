@@ -33,7 +33,7 @@ let main =
              let instrs = fun () -> StackMachine.Compile.prog prog
              in
              match mode with
-             | `DebugSM -> PrettyPrinter.Print.instrs @@ instrs ()
+             (*| `DebugSM -> PrettyPrinter.Print.instrs @@ instrs ()*)
              | _ ->
                 let output = match mode with
                   | `SM -> StackMachine.Interpreter.run (ints ()) @@ instrs ()

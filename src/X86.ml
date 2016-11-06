@@ -6,27 +6,28 @@
 (* //TODO ??? *)
 (* //TODO сделать рефакторинг *)
 (* //TODO перепройти все тесты *)
+(* //TODO переделать функции в SM и Int правильно? и с классами *)
 
 type opnd = R of int | S of int | M of string | L of int
 
 let x86regs = [|
     "%eax";
     "%ebx";
-    "%ecx";
     "%edx";
+    "%ecx";
     "%esi";
     "%edi"
   |]
 
 let num_of_regs = Array.length x86regs
-let first_free = 4
+let first_free = 3
 let rff = R first_free
-let word_size = 4
+let word_size = 3
 
 let eax = R 0
 let ebx = R 1
-let ecx = R 2
-let edx = R 3
+let edx = R 2
+let ecx = R 3
 let esi = R 4
 let edi = R 5
             
@@ -117,7 +118,7 @@ module Compile =
                 (s::stack, [X86Call "read"; X86Binop ("->", eax, s)])
              | S_WRITE ->
                 let s::stack' = stack in
-                (stack', [X86Push s; X86Call "write"; X86Pop s]) 
+                (stack', [X86Push s; X86Call "write"; X86Pop s])
              | S_PUSH n ->
 		let s = allocate env stack in
 		(s::stack, [X86Binop ("->", L n, s)])
@@ -167,10 +168,13 @@ module Compile =
       compile [] code
               
   end
+
+(* .comm vs .lcomm *)
+(* Нужно поробовать сначала без этого *)
     
 let compile prog =
   let env = new x86env in
-  let code = Compile.stack_program env @@ StackMachine.Compile.prog prog in
+  let code = Compile.stack_program env @@ (*StackMachine.Compile.prog prog*) [S_LBL "main"] in
   let asm  = Buffer.create 1024 in
   let (!!) s = Buffer.add_string asm s in
   let (!)  s = !!s; !!"\n" in

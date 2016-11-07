@@ -1,7 +1,7 @@
 # test logs and outputs
-test[0-9]*
-test*.s
-test*.log
+*test[0-9]*
+*test*.s
+*test*.log
 generated[0-9]*
 generated*.s
 generated*.log

@@ -1,13 +1,13 @@
 # simple-compiler
 
 Implementing a simple language.
-What we have so far:
+What do we have so far:
 
-                                  | Intrepreter | Stack Machine | x86 |
---------------------------------- | ----------- | ------------- | --- |
-binops                            | [x]         | [x]           | [x] |
-if/while/for/repeat control flows | [x]         | [x]           | [x] |
-funcs                             | [x]         | [x]           | [ ] |
+                                  | Interepreter | Stack Machine | x86 |
+--------------------------------- | ------------ | ------------- | --- |
+binops                            | [x]          | [x]           | [x] |
+if/while/for/repeat control flows | [x]          | [x]           | [x] |
+funcs                             | [x]          | [x]           | [ ] |
 
 # TODO
 
@@ -18,3 +18,5 @@ funcs                             | [x]         | [x]           | [ ] |
 - [ ] сделать рефакторинг
 - [ ] перепройти все тесты
 - [ ] переделать функции в SM и Int правильно? и с классами env
+- [ ] сохранять регистры после вызова функции
+- [ ] аллоцировать только память под локальные переменные

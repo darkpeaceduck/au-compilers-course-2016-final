@@ -228,7 +228,7 @@ let compile_fdef env (name, args, s_body) =
   @ (Compile.stack_program env s_body)
   @ [X86Leave]
   @ [X86Ret]
-  
+      
 let compile_main env s_main =
   env#clear;
   [X86Lbl "main"]

@@ -237,7 +237,7 @@ let compile_main env s_main =
   @ [X86Binop ("@", eax, eax)]
   @ [X86Leave]
   @ [X86Ret]
-          
+
 let compile prog =
   let env = new x86env
   in
@@ -249,16 +249,12 @@ let compile prog =
   in
   let (!) s = !!s; !!"\n"
   in
-  let c_fdefs = List.fold_left
-                  (fun c_fdefs s_fdef -> c_fdefs @ (compile_fdef env s_fdef))
-                  []
-                  s_fdefs
-  in
-  let c_main = compile_main env s_main
+  let add_asm list = List.iter (fun i -> !(Show.instr env i)) list
   in
   !"\t.text";
   !"\t.globl\tmain";
-  List.iter (fun i -> !(Show.instr env i)) (c_fdefs @ c_main);
+  List.iter (fun s_fdef -> add_asm @@ compile_fdef env s_fdef) s_fdefs;
+  add_asm @@ compile_main env s_main;
   !!"\n";
   Buffer.contents asm
                   

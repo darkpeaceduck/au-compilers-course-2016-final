@@ -14,15 +14,13 @@ module Instrs =
       | S_RET
       | S_END
   end
-module Lbl =
-  struct
-    let to_lbl v = Printf.sprintf "_lbl%d" v
-  end
+
 module Interpreter : sig
   val run : int list -> (string * string list * Instrs.t list) list * Instrs.t list -> int list
 end =
   struct
     module M = Map.Make (String)
+
     class env code labels input = object
       val cn : Instrs.t array = Array.of_list code (* Instrs.t array of stack machine *)
       val lm : int M.t = labels (* labels to line number map *)
@@ -43,6 +41,7 @@ end =
       method goto l = M.find l lm
       method get_os = List.rev os
     end
+       
     open Instrs
     let preprocess code =
       let rec labels ln = function
@@ -53,8 +52,7 @@ end =
              | S_LBL _ -> ln
              | _ -> ln + 1
            in
-           let code, labels = labels ln' code'
-           in
+           let code, labels = labels ln' code' in
            match i with
            | S_LBL l -> code, M.add l ln labels
            | _ -> i::code, labels
@@ -66,23 +64,18 @@ end =
                          []
                          s_fdefs
       in
-      let code = [S_JMP "main"] @ fdefs_code @ [S_LBL "main"] @ s_main
-      in
-      let code, labels = preprocess code   
-      in
-      let env = new env code labels input
-      in
+      let code = [S_JMP "main"] @ fdefs_code @ [S_LBL "main"] @ s_main in
+      let code, labels = preprocess code in
+      let env = new env code labels input in
       let rec run' ln =
-        let io = env#get_ci ln
-        in
+        let io = env#get_ci ln in
         match io with
         | None -> ()
         | Some i ->
            match i with
            | S_JMP l -> run' @@ env#goto l
            | S_CJMP (c, l) ->
-              let x = env#pop
-              in
+              let x = env#pop in
               let d =
                 match c with
                 | "z" -> x = 0
@@ -98,10 +91,8 @@ end =
               run' @@ env#goto name
            | S_RET ->
               env#del_frame;
-              let rv = env#pop
-              in
-              let rln = env#pop
-              in
+              let rv = env#pop in
+              let rln = env#pop in
               env#push rv;
               run' rln
            | S_END -> ()
@@ -118,29 +109,31 @@ end =
       run' 0;
       env#get_os
   end
+
 module Compile : sig
   val prog : Language.Prog.t -> (string * string list * Instrs.t list) list * Instrs.t list
 end =
   struct
-    module M = Map.Make (String)
     open Instrs
     open Language.Expr
     open Language.Stmt
+    module M = Map.Make (String)
+
     class next_val =
     object(self)
       val mutable v = -1
       method next =
         v <- v + 1;
-        v
+        Printf.sprintf "lbl%d" v
     end
+      
     let prog (fdefs, main) =
       let funcs = List.fold_left
                     (fun funcs (name, args, _) -> M.add name args funcs)
                     M.empty
                     fdefs
       in
-      let nv = new next_val
-      in
+      let nv = new next_val in
       let rec expr = function
         | Var x -> [S_LD x]
         | Const n -> [S_PUSH n]
@@ -154,8 +147,7 @@ end =
                 | _ -> [S_PUSH 0] @ nesum @ [S_BINOP "<"])
             | _ -> l' @ r' @ [S_BINOP o])
         | FCall (name, args) ->
-           let s_push_args = List.concat @@ List.rev @@ List.map (fun arg -> expr arg) args
-           in
+           let s_push_args = List.concat @@ List.rev @@ List.map (fun arg -> expr arg) args in
            s_push_args @ [S_CALL (name, M.find name funcs)]
       in
       let rec stmt stmt' =
@@ -166,10 +158,8 @@ end =
         | Write e -> expr e @ [S_WRITE]
         | Seq (l, r) -> stmt l @ stmt r
         | While _ | If _ ->
-           (let lbl1 = Lbl.to_lbl nv#next
-            in
-            let lbl2 = Lbl.to_lbl nv#next
-            in
+           (let lbl1 = nv#next in
+            let lbl2 = nv#next in
             match stmt' with
             | While  (e, s) ->
                [S_LBL lbl1] @ expr e @ [S_CJMP ("z", lbl2)] @ stmt s @ [S_JMP lbl1] @ [S_LBL lbl2]
@@ -178,8 +168,7 @@ end =
         | FCall (name, args) -> expr @@ Language.Expr.FCall (name, args)
         | Return e -> expr e @ [S_RET]
       in
-      let fdef (name, args, body) = name, args, stmt body
-      in
+      let fdef (name, args, body) = name, args, stmt body in
       let s_fdefs = List.map
                       (fun fdef' -> fdef fdef')
                       fdefs

@@ -20,6 +20,5 @@ end =
       | S_CALL (name, args) -> "S_CALL " ^ (String.concat " " (name::args))
       | S_RET -> "S_RET"
       | S_END -> "S_END"
-    let instrs l =
-      List.iter (fun i -> Printf.printf "%s\n" (instr i)) l
+    let instrs l = List.iter (fun i -> Printf.printf "%s\n" (instr i)) l
   end

@@ -1,5 +1,6 @@
 open Ostap
 open Matcher
+
 module Expr =
   struct
     open Language.Expr
@@ -28,6 +29,7 @@ module Expr =
         | -"(" parse -")"                                              
     )
   end
+    
 module Stmt =
   struct
     open Language.Stmt
@@ -56,6 +58,7 @@ module Stmt =
         | %"return" e:expr {Return (e)}
     )
   end
+
 module FDef =
   struct
     open Language.FDef
@@ -65,6 +68,7 @@ module FDef =
       parse: %"fun" name:IDENT -"(" args:!(Util.list0 arg) -")" %"begin" body:stmt %"end"
     )
   end
+
 module Prog =
   struct
     open Language.Prog
@@ -74,11 +78,11 @@ module Prog =
       parse: fdefs:(fdef)* main:stmt
     )
   end
+
 module File =
   struct
     let parse infile =
-      let s = Util.read infile
-      in
+      let s = Util.read infile in
       Util.parse
         (object
            inherit Matcher.t s

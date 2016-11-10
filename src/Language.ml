@@ -6,6 +6,7 @@ module Expr =
       | Binop of string * t * t
       | FCall of string * t list
   end
+
 module Stmt =
   struct
     type t =
@@ -19,10 +20,12 @@ module Stmt =
       | FCall of string * Expr.t list
       | Return of Expr.t
   end
+    
 module FDef =
   struct
     type t = string * string list * Stmt.t
   end
+    
 module Prog =
   struct
     type t = FDef.t list * Stmt.t

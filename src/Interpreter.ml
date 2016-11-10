@@ -25,7 +25,8 @@ end =
     let add_o (vm, fm, is, os) o = (vm, fm, is, o::os)
     let get_os (_, _, _, os) = List.rev os
     let update_ios (vm, fm, _, _) (_, _, is, os) = (vm, fm, is, os)
-  end   
+  end
+
 module Expr : sig
   val eval_binop : string -> int -> int -> int
   val eval : Env.t -> Language.Expr.t -> Env.t * int
@@ -50,16 +51,15 @@ end =
            | "&&" -> (l <> 0) && (r <> 0)
            | "!!" -> (l <> 0) || (r <> 0)
          in bool_to_int e
+
     open Language.Expr
     let rec eval env expr =
       match expr with
       | Const n -> env, n
       | Var x -> env, Env.get_v env x
       | Binop (o, l, r) ->
-         let env, retl = eval env l
-         in
-         let env, retr = eval env r
-         in
+         let env, retl = eval env l in
+         let env, retr = eval env r in
          env, eval_binop o retl retr
       | FCall (name, args) ->
          let env, values = List.fold_left
@@ -67,10 +67,10 @@ end =
                              (env, [])
                              args
          in
-         let env', ret = (Env.get_f env name @@ Env.clear_vm env) @@ List.rev values
-         in
+         let env', ret = (Env.get_f env name @@ Env.clear_vm env) @@ List.rev values in
          Env.update_ios env env', ret
   end
+
 module Stmt : sig
   val eval : Env.t -> Language.Stmt.t -> Env.t * int option
 end =
@@ -80,40 +80,33 @@ end =
       match stmt with
       | Skip -> env, None
       | Seq (l, r) ->
-         let (env, ret) as res = eval env l
-         in
+         let (env, ret) as res = eval env l in
          (match ret with
           | None   -> eval env r
           | Some r -> res)
       | Assign (x, e) ->
-         let env, ret = Expr.eval env e
-         in
+         let env, ret = Expr.eval env e in
          Env.set_v env x ret, None
       | Write e ->
-         let env, ret = Expr.eval env e
-         in
+         let env, ret = Expr.eval env e in
          Env.add_o env ret, None
       | Read x ->
-         let env, i = Env.take_i env
-         in
+         let env, i = Env.take_i env in
          Env.set_v env x i, None
       | (While (e, s)) as st ->
-         let env, ret = Expr.eval env e
-         in
+         let env, ret = Expr.eval env e in
          if (ret <> 0) then eval env (Seq (s, st)) else env, None
       | If (e, s1, s2) ->
-         let env, ret = Expr.eval env e
-         in
+         let env, ret = Expr.eval env e in
          eval env (if (ret <> 0) then s1 else s2)
       | FCall (name, args) ->
-         let env, _ = Expr.eval env (Language.Expr.FCall (name, args))
-         in
+         let env, _ = Expr.eval env (Language.Expr.FCall (name, args)) in
          env, None
       | Return e ->
-         let env, ret = Expr.eval env e
-         in
+         let env, ret = Expr.eval env e in
          env, Some ret
-  end   
+  end
+
 module Prog : sig
   val eval : int list -> Language.Prog.t -> int list
 end =
@@ -125,8 +118,7 @@ end =
                     env
                     (List.combine args values)
         in
-        let env, Some ret = Stmt.eval env body
-        in
+        let env, Some ret = Stmt.eval env body in
         env, ret
       in
       let env = List.fold_left
@@ -134,7 +126,6 @@ end =
                   (Env.init input)
                   fdefs
       in
-      let env, _ = Stmt.eval env main
-      in
+      let env, _ = Stmt.eval env main in
       Env.get_os env
   end

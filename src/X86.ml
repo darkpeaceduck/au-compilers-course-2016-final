@@ -64,7 +64,11 @@ object(self)
     match self#get_local_reg_num_option with
     | Some n -> Some (R n)
     | None -> None
-  (* LOCAL *)
+  method is_used s =
+    match s with
+    | R n -> not @@ S.mem n !regs_nums
+    | _ -> false
+  (* Local *)
   val local_vars = ref M.empty
   val allocated_local = ref 0
   method allocated_local = !allocated_local
@@ -167,15 +171,17 @@ module Compile =
 	| [] | (S_END)::_ -> []
 	| i::code' ->
 	   let (stack', x86code) =
+             let nil = [], [] in
+             let ($) (pre, post) opnd = pre @ [X86Push opnd], [X86Pop opnd] @ post in
              match i with
              | S_READ | S_WRITE ->
                 let process s =
-                  if s = ecx
-                  then [X86Push edx], [X86Pop edx]
-                  else
-                    if s = edx
-                    then [X86Push ecx], [X86Pop ecx]
-                    else [X86Push ecx; X86Push edx], [X86Pop edx; X86Pop ecx]
+                  let (+) lists opnd =
+                    if (opnd <> s) && (env#is_used opnd)
+                    then lists $ opnd
+                    else lists
+                  in
+                  nil + ecx + edx
                 in (* because printf and scanf modify ecx and edx *)
                 (match i with
                  | S_READ ->
@@ -190,19 +196,22 @@ module Compile =
                 let s = env#allocate stack in
                 (env#push stack s, [X86Binop ("->", L n, s)])
              | S_LD x ->
-                let m = env#get_local x in
                 let s = env#allocate stack in
+                let m = env#get_local x in
                 (env#push stack s,
                  match s, m with
                  | R _, _ | _, R _ -> [X86Binop ("->", m, s)]
                  | _ -> [X86Binop ("->", m, eax); X86Binop ("->", eax, s)])
              | S_ST x ->
-                let m = env#create_local x in
                 let s, stack' = env#pop stack in
+                let m = env#create_local x in
                 (stack',
-                 match s, m with
-                 | R _, _ | _, R _ -> [X86Binop ("->", s, m)]
-                 | _ -> [X86Binop ("->", s, eax); X86Binop ("->", eax, m)])
+                 if s = m
+                 then []
+                 else
+                   match s, m with
+                   | R _, _ | _, R _ -> [X86Binop ("->", s, m)]
+                   | _ -> [X86Binop ("->", s, eax); X86Binop ("->", eax, m)])
              | S_BINOP o ->
                 let l, stack'' = env#pop stack in
                 let r, stack' = env#pop stack'' in
@@ -228,14 +237,19 @@ module Compile =
                          then [], [X86Binop ("->", eax, r)]
                          else [], []
                        else
-                         [X86Push edx], [X86Binop ("->", mr o, r); X86Pop edx]
+                         if env#is_used edx
+                         then [X86Push edx], [X86Binop ("->", mr o, r); X86Pop edx]                  
+                         else [], [X86Binop ("->", mr o, r)]
                      in
                      pre @ [X86Binop ("->", r, eax); X86Cdq; X86Div l] @ post
                   | _ ->
                      let pre, post, l', r' =
                        match l, r with
                        | R _, _ | _, R _ -> [], [], l, r
-                       | _ -> [X86Push ebx; X86Binop ("->", r, ebx)], [X86Pop ebx], l, ebx
+                       | _ ->
+                          if env#is_used ebx
+                          then [X86Push ebx; X86Binop ("->", r, ebx)], [X86Pop ebx], l, ebx
+                          else [X86Binop ("->", r, ebx)], [], l, ebx
                      in
                      pre @ [X86Binop ("@", eax, eax); X86Binop ("=", l', r'); X86Set (o, "al"); X86Binop ("->", eax, r)] @ post
                 in

@@ -27,24 +27,53 @@ let esi = R 4
 let edi = R 5
             
 type instr =
-  | X86Binop of string * opnd * opnd (* add,+ / sub,- / mul,/ / cmp,= / xor,@ / mov,-> + opnd + opnd *)
-  | X86Div   of opnd
-  | X86Push  of opnd
-  | X86Pop   of opnd
+  | X86Binop    of string * opnd * opnd (* add,+ / sub,- / mul,/ / cmp,= / xor,@ / mov,-> + opnd + opnd *)
+  | X86Div      of opnd
+  | X86Push     of opnd
+  | X86Pop      of opnd
   | X86Cdq
-  | X86Set   of string * string (* <=/</==/!=/>=/> + le *)
-  | X86Call  of string
-  | X86Lbl   of string
-  | X86Jmp   of string (* lbl *)
-  | X86CJmp  of string * string (* z/nz + lbl *)
-  | X86Enter of int
+  | X86Set      of string * string (* <=/</==/!=/>=/> + le *)
+  | X86Call     of string
+  | X86Lbl      of string
+  | X86Jmp      of string (* lbl *)
+  | X86CJmp     of string * string (* z/nz + lbl *)
+  | X86Enter
   | X86Leave
   | X86Ret
-             
+  | X86Allocate of int
+
+module S =
+  Set.Make
+    (struct
+      type t = int
+      let compare = compare
+    end)
 module M = Map.Make (String)
                     
 class x86env =
 object(self)
+  (* REGISTERS *)
+  val regs_nums = ref S.empty
+  method private clear_regs_nums =
+    regs_nums := S.empty;
+    for i = 1 to num_of_regs - 1 do
+      regs_nums := S.add i !regs_nums
+    done
+  method regs_nums = S.cardinal !regs_nums
+  val max_regs_used = ref 0
+  method max_regs_used = !max_regs_used
+  method private get_local_reg_num_option =
+    try
+      let elem = S.min_elt !regs_nums
+      in
+      max_regs_used := max !max_regs_used elem;
+      regs_nums := S.remove elem !regs_nums;
+      Some elem
+    with Not_found -> None
+  method private get_local_reg_option =
+    match self#get_local_reg_num_option with
+    | Some n -> Some (R n)
+    | None -> None
   (* LOCAL *)
   val local_vars = ref M.empty
   val allocated_local = ref 0
@@ -56,23 +85,42 @@ object(self)
       Some (M.find x !local_vars)
     with Not_found -> None
   method create_local x =
-    match (self#get_local_option x) with
+    match self#get_local_option x with
     | Some y -> y
-    | None -> allocated_local := !allocated_local + 1;
-              local_vars := M.add x (M (!allocated_local - 1)) !local_vars;
-              M (!allocated_local - 1)
+    | None ->
+       match self#get_local_reg_option with
+       | Some y -> self#set_local x y; y
+       | None ->
+          allocated_local := !allocated_local + 1;
+          self#set_local x @@ M (!allocated_local - 1);
+          M (!allocated_local - 1)
   (* STACK *)
-  val allocated_stack = ref 0
-  method allocated_stack = !allocated_stack
-  method update_stack n = allocated_stack := max !allocated_stack n
+  val allocated_stack_max = ref 0
+  method allocated_stack_max = !allocated_stack_max
+  method private update_stack n = allocated_stack_max := max !allocated_stack_max n
   method allocate stack =
-    match stack with
-    | [] -> self#update_stack 1; S 0
-    | (S n)::_ -> self#update_stack (n + 2); S (n + 1)
+    match self#get_local_reg_option with
+    | Some r -> r
+    | None ->
+       match stack with
+       | [] | (R _)::_ -> S 0
+       | (S n)::_ -> S (n + 1)
+  method push stack opnd =
+    (match opnd with
+     | R n -> regs_nums := S.remove n !regs_nums
+     | S n -> self#update_stack (n + 1));
+    opnd::stack
+  method pop stack =
+    let s::stack' = stack
+    in
+    (match s with
+     | R n -> regs_nums := S.add n !regs_nums
+     | _ -> ());
+    s, stack'
   (* TOTAL *)
-  method allocated_total = self#allocated_local + self#allocated_stack
+  method allocated_total = self#allocated_local + self#allocated_stack_max
   (* CLEAR *)
-  method clear = local_vars := M.empty; allocated_local := 0; allocated_stack := 0
+  method clear = self#clear_regs_nums; local_vars := M.empty; allocated_local := 0; allocated_stack_max := 0
 end
 
 (*let allocate env stack =
@@ -122,12 +170,18 @@ module Show =
       | X86Lbl s           -> Printf.sprintf "%s:" s
       | X86Jmp s           -> Printf.sprintf "\tjmp\t%s" s
       | X86CJmp (s, l)     -> Printf.sprintf "\tj%s\t%s" s l
-      | X86Enter n         -> Printf.sprintf "\tpushl\t%%ebp\n\tmovl\t%%esp,\t%%ebp\n\tsubl\t$%d,\t%%esp" (n * word_size)
+      | X86Enter           -> Printf.sprintf "\tpushl\t%%ebp\n\tmovl\t%%esp,\t%%ebp"
       | X86Leave           -> Printf.sprintf "\tleave"
       | X86Ret             -> "\tret"
+      | X86Allocate n      -> Printf.sprintf "\tsubl\t$%d,\t%%esp" (n * word_size)
                                           
   end
 
+(* СЕЙЧАС *)
+(* наш стек не повторяет реальный стек, мы считаем на сколько максимально мы можем расшириться - easy mode (?) *)
+(* используем регистры начиная с ebx - это надо учитывать, a в eax возврат функции *)
+(* регистры которые мы используем в процессе исполнения команд - надо сохранять и восстанавливать *)
+    
 module Compile =
   struct
 
@@ -142,29 +196,128 @@ module Compile =
              match i with
              | S_READ ->
                 let s = env#allocate stack
-                in 
-                (s::stack, [X86Call "read"; X86Binop ("->", eax, s)])
-             | S_WRITE ->
-                let s::stack' = stack
                 in
-                (stack', [X86Push s; X86Call "write"; X86Pop s])
+                let pre, post =
+                  if s = ecx
+                  then [X86Push edx], [X86Pop edx]
+                  else
+                    if s = edx
+                    then [X86Push ecx], [X86Pop ecx]
+                    else [X86Push ecx; X86Push edx], [X86Pop edx; X86Pop ecx]
+                in (* because scanf modify ecx and edx *)
+                (env#push stack s, pre @ [X86Call "read"; X86Binop ("->", eax, s)] @ post)
+             (*| S_READ ->
+                let s = env#allocate stack
+                in
+                (s::stack, if s = eax
+                           then [X86Call "read"]
+                           else [X86Push eax; X86Call "read"; X86Binop ("->", eax, s); X86Pop eax])*)
+             (*| S_READ ->
+                let s = env#allocate stack
+                in 
+                (s::stack, [X86Push eax; X86Call "read"; X86Binop ("->", eax, s); X86Pop eax])*)
+             | S_WRITE ->
+                let s, stack' = env#pop stack
+                in
+                let pre, post =
+                  if s = ecx
+                  then [X86Push edx], [X86Pop edx]
+                  else
+                    if s = edx
+                    then [X86Push ecx], [X86Pop ecx]
+                    else [X86Push ecx; X86Push edx], [X86Pop edx; X86Pop ecx]
+                in (* because printf modify ecx and edx *)
+                (stack', pre @ [X86Push s; X86Call "write"; X86Pop s] @ post)
              | S_PUSH n ->
                 let s = env#allocate stack
                 in
-                (s::stack, [X86Binop ("->", L n, s)])
+                (env#push stack s, [X86Binop ("->", L n, s)])
              | S_LD x ->
+                let m = env#get_local x
+                in
+                let s = env#allocate stack
+                in
+                (env#push stack s,
+                 match s, m with
+                 | R _, _ | _, R _ -> [X86Binop ("->", m, s)]
+                 | _ -> [X86Binop ("->", m, eax); X86Binop ("->", eax, s)])
+             (*| S_LD x ->
+                let s = env#allocate stack
+                in
+                let m = env#get_local x
+                in
+                (s::stack, match s, m with
+                           | R _, _ | _, R _ -> [X86Binop ("->", m, s)]
+                           | _ -> [X86Push eax; X86Binop ("->", m, eax); X86Binop ("->", eax, s); X86Pop eax])*)
+             (*| S_LD x ->
                 let s = env#allocate stack
                 in
                 let m = env#get_local x
                 in                    
-                (s::stack, [X86Binop ("->", m, eax); X86Binop ("->", eax, s)])
+                (s::stack, [X86Binop ("->", m, eax); X86Binop ("->", eax, s)])*)
              | S_ST x ->
+                let m = env#create_local x
+                in
+                let s, stack' = env#pop stack
+                in
+                (stack',
+                 match s, m with
+                 | R _, _ | _, R _ -> [X86Binop ("->", s, m)]
+                 | _ -> [X86Binop ("->", s, eax); X86Binop ("->", eax, m)])
+             (*| S_ST x ->
                 let s::stack' = stack
                 in
                 let m = env#create_local x
                 in
-                (stack', [X86Binop ("->", s, eax); X86Binop ("->", eax, m)])
+                (stack', match s, m with
+                         | R _, _ | _, R _ -> [X86Binop ("->", s, m)]
+                         | _ -> [X86Push eax; X86Binop ("->", s, eax); X86Binop ("->", eax, m); X86Pop eax])*)
+             (*| S_ST x ->
+                let s::stack' = stack
+                in
+                let m = env#create_local x
+                in
+                (stack', [X86Binop ("->", s, eax); X86Binop ("->", eax, m)])*)
              | S_BINOP o ->
+                let l, stack'' = env#pop stack
+                in
+                let r, stack' = env#pop stack''
+                in
+                let cmds =
+                  match o with
+                  | "+" | "-" | "*" ->
+                     let pre, post, l', r' =
+                       match l, r with
+                       | R _, _ | _, R _ -> [], [], l, r
+                       | _ -> [X86Binop ("->", r, eax)], [X86Binop ("->", eax, r)], l, eax
+                     in
+                     pre @ [X86Binop (o, l', r')] @ post
+                  | "/" | "%" ->
+                     let mr o =
+                       match o with
+                       | "/" -> eax
+                       | "%" -> edx
+                     in
+                     let pre, post =
+                       if r = edx
+                       then
+                         if o = "/"
+                         then [], [X86Binop ("->", eax, r)]
+                         else [], []
+                       else
+                         [X86Push edx], [X86Binop ("->", mr o, r); X86Pop edx]
+                     in
+                     pre @ [X86Binop ("->", r, eax); X86Cdq; X86Div l] @ post
+                  | _ ->
+                     let pre, post, l', r' =
+                       match l, r with
+                       | R _, _ | _, R _ -> [], [], l, r
+                       | _ -> [X86Push ebx; X86Binop ("->", r, ebx)], [X86Pop ebx], l, ebx
+                     in
+                     pre @ [X86Binop ("@", eax, eax); X86Binop ("=", l', r'); X86Set (o, "al"); X86Binop ("->", eax, r)] @ post
+                in
+                (env#push stack' r, cmds)           
+             (*| S_BINOP o ->
                 (let l::r::stack' = stack
                  in
                  let rec ifnreg (x,y) = match x,y with
@@ -184,14 +337,43 @@ module Compile =
                  | "/" | "%" -> (r::stack', [X86Binop ("->", r, eax); X86Cdq; X86Div l; X86Binop ("->", cdqo o, r)])
                  | _ -> let (prereq, l') = ifnreg (l, r)
                         in
-                        (r::stack', prereq @ cmd (l', r) o))
+                        (r::stack', prereq @ cmd (l', r) o))*)
              | S_LBL l -> (stack, [X86Lbl l])
              | S_JMP l -> (stack, [X86Jmp l])
              | S_CJMP (c, l) ->
-                let s::stack' = stack
+                let s, stack' = env#pop stack
                 in
                 (stack', [X86Binop ("->", s, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)])
+             (*| S_CJMP (c, l) ->
+                let s::stack' = stack
+                in
+                (stack', let pre, post = if s = eax
+                                         then [], []
+                                         else [X86Push eax; X86Binop ("->", s, eax)], [X86Pop eax]
+                         in
+                         pre @ [X86Binop ("=", L 0, eax); X86CJmp (c, l)] @ post)*)
+             (*| S_CJMP (c, l) ->
+                let s::stack' = stack
+                in
+                (stack', [X86Binop ("->", s, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)])*)
              | S_CALL (name, args) ->
+                let rec process num stack =
+                  match num with
+                  | 0 ->
+                     let s = env#allocate stack
+                     in
+                     (env#push stack s, [], [X86Binop ("->", eax, s)])
+                  | n ->
+                     let s, stack' = env#pop stack
+                     in
+                     let st, bn, ed = process (num - 1) stack'
+                     in
+                     (st, (X86Push s)::bn, (X86Pop eax)::ed)
+                in
+                let st, bn, ed = process (List.length args) stack
+                in
+                (st, bn @ [X86Call name] @ (List.rev ed))
+             (*| S_CALL (name, args) ->
                 let rec process num stack =
                   match num with
                   | 0 ->
@@ -207,33 +389,63 @@ module Compile =
                 in
                 let st, bn, ed = process (List.length args) stack
                 in
-                (st, bn @ [X86Call name] @ (List.rev ed))
+                (st, bn @ [X86Call name] @ (List.rev ed))*)
              | S_RET ->
-                let s::stack' = stack
+                let s, stack' = env#pop stack
                 in
                 (stack', [X86Binop ("->", s, eax)])
+           (*| S_RET ->
+                let s::stack' = stack
+                in
+                (stack', if s = eax
+                         then []
+                         else [X86Binop ("->", s, eax)])*)
+             (*| S_RET ->
+                let s::stack' = stack
+                in
+                (stack', [X86Binop ("->", s, eax)])*)
            in
 	   x86code @ (compile stack' code')
       in
       compile [] code
   end
-    
+
+let rec regs_to_stack n =
+  match n with
+  | 0 -> [], []
+  | _ ->
+     let pre, post = regs_to_stack (n - 1)
+     in
+     pre @ [X86Push (R n)], [X86Pop (R n)] @ post
+                                               
 let compile_fdef env (name, args, s_body) =
   env#clear;
-  let n = List.length args
+  List.iteri (fun ind arg -> env#set_local arg @@ F ind) @@ List.rev args;
+  let code = Compile.stack_program env s_body
   in
-  List.iteri (fun ind arg -> env#set_local arg @@ F (n - ind - 1)) args;
+  let prer, postr = regs_to_stack env#max_regs_used
+  in
   [X86Lbl name]
-  @ [X86Enter env#allocated_total]
-  @ (Compile.stack_program env s_body)
+  @ [X86Enter]
+  @ [X86Allocate env#allocated_total]
+  @ prer
+  @ code
+  @ postr
   @ [X86Leave]
   @ [X86Ret]
       
 let compile_main env s_main =
   env#clear;
+  let code = Compile.stack_program env s_main
+  in
+  let prer, postr = regs_to_stack env#max_regs_used
+  in
   [X86Lbl "main"]
-  @ [X86Enter env#allocated_total]
-  @ (Compile.stack_program env s_main)
+  @ [X86Enter]
+  @ [X86Allocate env#allocated_total]
+  @ prer
+  @ code
+  @ postr
   @ [X86Binop ("@", eax, eax)]
   @ [X86Leave]
   @ [X86Ret]
@@ -298,6 +510,6 @@ let build stmt name =
   close_out outf;
   let runtime_o = (try Sys.getenv "RUNTIME_O" with | Not_found -> failwith "Please, provide a runtime.o file!")
   in
-  let gcc_flags = "" (*"-Ofast"*)
+  let gcc_flags = "-g -Ofast"
   in
   ignore (Sys.command (Printf.sprintf "gcc %s -m32 -o %s %s %s.s" gcc_flags name runtime_o name))

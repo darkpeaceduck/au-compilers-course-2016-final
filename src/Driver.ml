@@ -1,5 +1,6 @@
 let main =
-  () try
+  ()
+    try
       let mode, filename =
         match Sys.argv.(1) with
         | "-p" -> `Parse, Sys.argv.(2) (* -p : print ast *)
@@ -15,23 +16,19 @@ let main =
       | `Ok prog -> 
 	 (match mode with
 	  | `X86 ->
-             let basename = Filename.chop_suffix filename ".expr"
-             in 
+             let basename = Filename.chop_suffix filename ".expr" in 
 	     X86.build prog basename
           | `Parse -> PrettyPrinter.Print.prog prog
 	  | _ ->
 	     let rec read acc =
 	       try
-		 let r = read_int ()
-                 in
+		 let r = read_int () in
 		 Printf.printf "> ";
 		 read (acc @ [r]) 
                with End_of_file -> acc
 	     in
-	     let ints = fun () -> read []
-             in
-             let instrs = fun () -> StackMachine.Compile.prog prog
-             in
+	     let ints = fun () -> read [] in
+             let instrs = fun () -> StackMachine.Compile.prog prog in
              match mode with
              (*| `DebugSM -> PrettyPrinter.Print.instrs @@ instrs ()*)
              | _ ->

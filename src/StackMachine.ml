@@ -41,13 +41,15 @@ module Interpreter =
 
     let run input (s_fdefs, s_main) =
       let open Instrs in
-      let code =
-        let fdefs_code = List.concat @@ List.map (fun (name, _, s_body) -> (S_LBL name)::s_body) s_fdefs in
-        List.concat [[S_JMP "main"]; fdefs_code; [S_LBL "main"]; s_main]
+      let env =
+        let code =
+          let fdefs_code = List.concat @@ List.map (fun (name, _, s_body) -> (S_LBL name)::s_body) s_fdefs in
+          List.concat [[S_JMP "main"]; fdefs_code; [S_LBL "main"]; s_main]
+        in
+        let labels = BatList.fold_lefti (fun m n i -> match i with | S_LBL l -> M.add l (n + 1) m | _ -> m) M.empty code
+        in
+        new env code labels input
       in
-      let labels = BatList.fold_lefti (fun m n i -> match i with | S_LBL l -> M.add l (n + 1) m | _ -> m) M.empty code
-      in
-      let env = new env code labels input in
       let rec run' ln =
         match env#get_ci ln with
         | S_END -> ()
@@ -85,16 +87,18 @@ module Interpreter =
 module Compile =
   struct
     module M = BatMap.Make(String)
-    class env = object
+    class env fargs = object
+      val fargs : string list M.t = fargs (* map for get func args *)
       val n : int ref = ref (-1) (* int for construct new lbl *)
-      val fargs : string list M.t ref = ref M.empty (* map for get func args *)
       method new_lbl = n := !n + 1; Printf.sprintf "lbl%d" !n
-      method set_fargs name args = fargs := M.add name args !fargs
-      method get_fargs name = M.find name !fargs
+      method get_fargs name = M.find name fargs
     end
                   
     let prog (fdefs, main) =
-      let env = new env in
+      let env =
+        let fargs = List.fold_left (fun m (name, args, _) -> M.add name args m) M.empty fdefs in
+        new env fargs
+      in
       let open Instrs in
       let rec expr =
         let open Language.Expr in
@@ -133,7 +137,6 @@ module Compile =
         | Return e -> expr e @ [S_RET]
       in
       let fdef (name, args, body) = name, args, stmt body in
-      List.iter (fun (name, args, _) -> env#set_fargs name args) fdefs;
       List.map (fun fd -> fdef fd) fdefs, stmt main @ [S_END]
   end
     

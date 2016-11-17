@@ -12,15 +12,25 @@ end =
       | Var x -> Printf.printf "Var %s" x
       | Binop (o, l, r) -> !"("; expr l; !(" " ^ o ^ " "); expr r; !")"
       | FCall (name, args) -> !name; !"("; List.iter (fun arg -> expr arg; !",") args; !")"
-    let rec stmt =
+    let stmt st =
       let open Language.Stmt in
-      function
-      | Skip -> !"Skip "; !"\n"
-      | Seq (l, r) -> stmt l; stmt r
-      | Assign (x, e) -> !x; !" := "; expr e; !"\n"
-      | Write e -> !"Write ("; expr e; !")\n"
-      | While (e, s) -> !"While "; expr e; !" do"; !"\n"; stmt s; !"od"; !"\n"
-    let prog (fdefs, main) = stmt main (* //OLD Printf.printf "Not finished yet. Implement it at src/PrettyPrinter.ml, if needed.\n" *)
+      let rec stmt' n =
+        let doind n = for i = 1 to BatRef.get n do !" " done in
+        function
+        | Skip -> doind n; !"Skip "; !"\n"
+        | Seq (l, r) -> stmt' n l; stmt' n r
+        | Assign (x, e) -> doind n; !x; !" := "; expr e; !"\n"
+        | Write e -> doind n; !"Write ("; expr e; !")\n"
+        | Read x -> doind n; !"Read "; !x; !"\n"
+        | While (e, s) -> doind n; !"While "; expr e; !" do"; !"\n"; n := (BatRef.get n) + 3; stmt' n s; n := (BatRef.get n) - 3; doind n; !"od"; !"\n"
+        | If (e, s1, s2) -> doind n; !"If "; expr e; !" then\n"; n := (BatRef.get n) + 3; stmt' n s1; n := (BatRef.get n) - 3; doind n;
+                            !"else\n"; n := (BatRef.get n) + 3; stmt' n s2; n := (BatRef.get n) - 3; doind n; !"fi\n"
+        | FCall (name, args) -> doind n; expr @@ Language.Expr.FCall(name, args); !"\n"
+        | Return e -> doind n; !"Return "; expr e; !"\n"
+      in
+      let indent = ref 0 in
+      stmt' indent st
+    let prog (fdefs, main) = stmt main
     let ints l = List.iter (fun i -> Printf.printf "%d\n" i) l
     let instr (instr : StackMachine.Instrs.t) =
       match instr with

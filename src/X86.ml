@@ -126,19 +126,22 @@ module Show =
       | S i -> Printf.sprintf "-%d(%%ebp)" ((env#allocated_local + i + 1) * word_size)
       | L i -> Printf.sprintf "$%d" i                      
     let binop_to_x86 = function
-      | "+"  -> "addl"
-      | "-"  -> "subl"
-      | "*"  -> "imull"
-      | "="  -> "cmpl"
+      | "+" -> "addl"
+      | "-" -> "subl"
+      | "*" -> "imull"
+      | "=" -> "cmpl"
       | "->" -> "movl"
-      | "@"  -> "xorl"
+      | "@" -> "xorl"
     let set_to_x86 = function
       | "<=" -> "le"
-      | "<"  -> "l"
+      | "<" -> "l"
       | "==" -> "e"
       | "!=" -> "ne"
       | ">=" -> "ge"
-      | ">"  -> "g"
+      | ">" -> "g"
+    let cjmp_to_x86 = function
+      | "==0" -> "z"
+      | "!=0" -> "nz"
     let instr env =
       let cnvt x = opnd env x in
       function
@@ -150,8 +153,8 @@ module Show =
       | X86Set (o, s)      -> Printf.sprintf "\tset%s\t%%%s" (set_to_x86 o) s
       | X86Call s          -> Printf.sprintf "\tcall\t%s" s
       | X86Lbl s           -> Printf.sprintf "%s:" s
-      | X86Jmp s           -> Printf.sprintf "\tjmp\t%s" s
-      | X86CJmp (s, l)     -> Printf.sprintf "\tj%s\t%s" s l
+      | X86Jmp l           -> Printf.sprintf "\tjmp\t%s" l
+      | X86CJmp (c, l)     -> Printf.sprintf "\tj%s\t%s" (cjmp_to_x86 c) l
       | X86Enter           -> Printf.sprintf "\tpushl\t%%ebp\n\tmovl\t%%esp,\t%%ebp"
       | X86Leave           -> "\tleave"
       | X86Ret             -> "\tret"

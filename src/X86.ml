@@ -10,7 +10,9 @@ let x86regs = [|
     "%ecx";
     "%edx";
     "%esi";
-    "%edi"
+    "%edi";
+  (*"%esp";
+    "%ebp";*)
   |]
 let num_of_regs = Array.length x86regs
 let word_size = 4
@@ -155,16 +157,12 @@ module Show =
       | X86Lbl s           -> Printf.sprintf "%s:" s
       | X86Jmp l           -> Printf.sprintf "\tjmp\t%s" l
       | X86CJmp (c, l)     -> Printf.sprintf "\tj%s\t%s" (cjmp_to_x86 c) l
-      | X86Enter           -> Printf.sprintf "\tpushl\t%%ebp\n\tmovl\t%%esp,\t%%ebp"
+      | X86Enter           -> "\tpushl\t%ebp\n\tmovl\t%esp,\t%ebp"
       | X86Leave           -> "\tleave"
       | X86Ret             -> "\tret"
       | X86Allocate n      -> Printf.sprintf "\tsubl\t$%d,\t%%esp" (n * word_size)                            
   end
 
-(* СЕЙЧАС *)
-(* наш стек не повторяет реальный стек, мы считаем на сколько максимально мы можем расшириться - easy mode (?) *)
-(* используем регистры начиная с ebx - это надо учитывать, a в eax возврат функции *)
-(* регистры которые мы используем в процессе исполнения команд - надо сохранять и восстанавливать *)
 module Compile =
   struct
     open StackMachine.Instrs
@@ -278,6 +276,9 @@ module Compile =
              | S_RET ->
                 let s, stack' = env#pop stack in
                 (stack', [X86Binop ("->", s, eax)])
+             | S_POP ->
+                let _, stack' = env#pop stack in
+                (stack', [])
            in
 	   x86code @ (compile stack' code')
       in
@@ -337,10 +338,10 @@ let build stmt name =
   let outf = open_out @@ Printf.sprintf "%s.s" name in
   Printf.fprintf outf "%s" (compile stmt);
   close_out outf;
-  let runtime_o =
-    try
-      Sys.getenv "RUNTIME_O"
-    with Not_found -> failwith "Please, provide a runtime.o file!"
+  let runtime_src =
+    try Sys.getenv "RUNTIME_SRC"
+    with Not_found -> failwith "Please, provide a path to runtime src in RUNTIME_SRC env"
   in
   let gcc_flags = "-g -Ofast" in
-  ignore (Sys.command (Printf.sprintf "gcc %s -m32 -o %s %s %s.s" gcc_flags name runtime_o name))
+  let runtime_o = Filename.concat runtime_src "runtime.o" in
+  ignore @@ Sys.command (Printf.sprintf "gcc %s -m32 -o %s %s %s.s" gcc_flags name runtime_o name)

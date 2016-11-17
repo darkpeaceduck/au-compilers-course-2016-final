@@ -13,6 +13,7 @@ module Instrs =
       | S_CALL of string * string list
       | S_RET
       | S_END
+      | S_POP
   end
 
 module Interpreter =
@@ -77,7 +78,8 @@ module Interpreter =
                  | S_LD x -> env#ld x
                  | S_ST x -> env#st x
                  | S_BINOP o -> env#binop o
-                 | S_LBL _ -> ());
+                 | S_LBL _ -> ()
+                 | S_POP -> env#pop; ());
                 ln + 1
       in
       run' 0;
@@ -133,7 +135,7 @@ module Compile =
                List.concat [[S_LBL lbl1]; expr e; [S_CJMP ("==0", lbl2)]; stmt s; [S_JMP lbl1]; [S_LBL lbl2]]
             | If (e, s1, s2) ->
                List.concat [expr e; [S_CJMP ("==0", lbl2)]; stmt s1; [S_JMP lbl1]; [S_LBL lbl2]; stmt s2; [S_LBL lbl1]])
-        | FCall (name, args) -> expr @@ Language.Expr.FCall (name, args)
+        | FCall (name, args) -> (expr @@ Language.Expr.FCall (name, args)) @ [S_POP]
         | Return e -> expr e @ [S_RET]
       in
       let fdef (name, args, body) = name, args, stmt body in

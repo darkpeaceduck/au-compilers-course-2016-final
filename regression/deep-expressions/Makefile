@@ -4,7 +4,7 @@ TESTS=$(sort $(basename $(wildcard generated*.expr)))
 
 check: $(TESTS)
 
-$(TESTS): export RUNTIME_O=../../runtime/runtime.o
+$(TESTS): export RUNTIME_SRC=../../runtime/
 $(TESTS): %: %.expr
 	cat $@.input | ../../rc.native -i $< > $@.log && diff $@.log orig/$@.log
 	cat $@.input | ../../rc.native -s $< > $@.log && diff $@.log orig/$@.log

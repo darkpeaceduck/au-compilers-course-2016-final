@@ -44,7 +44,7 @@ $(TESTSS): %.s: %.expr
 	$(eval FILE:=$(basename $@))
 	cat $(FILE).input | ../rc.$(CMP) -s $< > $(FILE).log && diff $(DIFLAGS) $(FILE).log orig/$(FILE).log
 
-$(TESTSO): export RUNTIME_O=../runtime/runtime.o
+$(TESTSO): export RUNTIME_SRC=../runtime/
 $(TESTSO): %.o: %.expr
 	$(eval FILE:=$(basename $@))
 	../rc.$(CMP) -o $< && cat $(FILE).input | ./$(FILE) > $(FILE).log && diff $(DIFLAGS) $(FILE).log orig/$(FILE).log

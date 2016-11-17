@@ -89,7 +89,7 @@ module File =
            inherit Util.Lexers.ident
                      ["read"; "write"; "skip"; (* basic *)
                       "if"; "then"; "elif"; "else"; "fi"; (* if *)
-                      "while"; "do"; "od"; "repeat"; "until"; "for"; (* loop *)
+                      "while"; "do"; "od"; "repeat"; "until"; "for"; (* loops *)
                       "fun"; "begin"; "end"; "return"] (* fun *)
                      s
            inherit Util.Lexers.decimal s

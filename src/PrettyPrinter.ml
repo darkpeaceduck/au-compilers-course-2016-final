@@ -4,7 +4,23 @@ module Print : sig
   val instrs : StackMachine.Instrs.t list -> unit
 end =
   struct
-    let prog _ = Printf.printf "Not finished yet. Implement it at src/PrettyPrinter.ml, if needed.\n"
+    let (!) s = Printf.printf "%s" s
+    let rec expr =
+      let open Language.Expr in
+      function
+      | Const n -> Printf.printf "Const %d" n
+      | Var x -> Printf.printf "Var %s" x
+      | Binop (o, l, r) -> !"("; expr l; !(" " ^ o ^ " "); expr r; !")"
+      | FCall (name, args) -> !name; !"("; List.iter (fun arg -> expr arg; !",") args; !")"
+    let rec stmt =
+      let open Language.Stmt in
+      function
+      | Skip -> !"Skip "; !"\n"
+      | Seq (l, r) -> stmt l; stmt r
+      | Assign (x, e) -> !x; !" := "; expr e; !"\n"
+      | Write e -> !"Write ("; expr e; !")\n"
+      | While (e, s) -> !"While "; expr e; !" do"; !"\n"; stmt s; !"od"; !"\n"
+    let prog (fdefs, main) = stmt main (* //OLD Printf.printf "Not finished yet. Implement it at src/PrettyPrinter.ml, if needed.\n" *)
     let ints l = List.iter (fun i -> Printf.printf "%d\n" i) l
     let instr (instr : StackMachine.Instrs.t) =
       match instr with

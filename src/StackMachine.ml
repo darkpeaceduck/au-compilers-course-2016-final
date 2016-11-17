@@ -34,7 +34,7 @@ end =
       method push n = st <- n::st
       method ld x = let vm::_ = sf in st <- (M.find x vm)::st
       method st x = let (vm::sf', y::st') = (sf, st) in sf <- (M.add x y vm)::sf'; st <- st'
-      method binop o = let r::l::st' = st in st <- (Interpreter.Expr.eval_binop o l r)::st'
+      method binop o = let r::l::st' = st in st <- (Interpreter.eval_binop o l r)::st'
       method pop = let i::st' = st in st <- st'; i
       method new_frame = sf <- M.empty::sf
       method del_frame = let _::sf' = sf in sf <- sf'

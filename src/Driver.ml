@@ -32,9 +32,10 @@ let main =
              match mode with
              (*| `DebugSM -> PrettyPrinter.Print.instrs @@ instrs ()*)
              | _ ->
-                let output = match mode with
+                let output =
+                  match mode with
                   | `SM -> StackMachine.Interpreter.run (ints ()) @@ instrs ()
-                  | _ -> Interpreter.Prog.eval (ints ()) prog
+                  | _ -> Interpreter.run (ints ()) prog
                 in
                 PrettyPrinter.Print.ints output)
       | `Fail er -> Printf.eprintf "Parse error: %s" er

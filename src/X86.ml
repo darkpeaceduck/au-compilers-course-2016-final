@@ -136,6 +136,11 @@ module Compile =
 	   let (stack', x86code) =
              let nil = [], [] in
              let ($) (pre, post) opnd = pre @ [X86Push opnd], [X86Pop opnd] @ post in
+             let mov_w_reg ?(r=eax) f t =
+               match f, t with
+               | R _, _ | _, R _ -> [X86Binop ("->", f, t)]
+               | _ -> [X86Binop ("->", f, r); X86Binop ("->", r, t)]
+             in
              match i with
              | S_READ ->
                 let s = env#allocate stack in
@@ -147,22 +152,13 @@ module Compile =
                 let s = env#allocate stack in
                 (env#push stack s, [X86Binop ("->", L n, s)])
              | S_LD x ->
-                let s = env#allocate stack in
                 let m = env#get_local x in
-                (env#push stack s,
-                 match s, m with
-                 | R _, _ | _, R _ -> [X86Binop ("->", m, s)]
-                 | _ -> [X86Binop ("->", m, eax); X86Binop ("->", eax, s)])
+                let s = env#allocate stack in
+                (env#push stack s, mov_w_reg m s)
              | S_ST x ->
                 let s, stack' = env#pop stack in
                 let m = env#create_local x in
-                (stack',
-                 if s = m
-                 then []
-                 else
-                   match s, m with
-                   | R _, _ | _, R _ -> [X86Binop ("->", s, m)]
-                   | _ -> [X86Binop ("->", s, eax); X86Binop ("->", eax, m)])
+                (stack', if s = m then [] else mov_w_reg s m)
              | S_BINOP o ->
                 let l, stack'' = env#pop stack in
                 let r, stack' = env#pop stack'' in
@@ -197,18 +193,18 @@ module Compile =
                 let s, stack' = env#pop stack in
                 (stack', [X86Binop ("->", s, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)])
              | S_CALL (name, args) ->
-                let rec process num stack =
+                let rec precall num stack =
                   match num with
                   | 0 ->
                      let s = env#allocate stack in
                      (env#push stack s, [], [X86Binop ("->", eax, s)])
                   | n ->
                      let s, stack' = env#pop stack in
-                     let st, bn, ed = process (num - 1) stack' in
-                     (st, (X86Push s)::bn, (X86Pop eax)::ed)
+                     let stack', pre, post = precall (num - 1) stack' in
+                     (stack', (X86Push s)::pre, (X86Pop eax)::post)
                 in
-                let st, bn, ed = process (List.length args) stack in
-                (st, bn @ [X86Call name] @ (List.rev ed))
+                let stack', pre, post = precall (List.length args) stack in
+                (stack', List.concat [pre; [X86Call name]; List.rev post])
              | S_RET ->
                 let s, stack' = env#pop stack in
                 (stack', [X86Binop ("->", s, eax)])
@@ -273,61 +269,64 @@ module Show =
       in
       instr' i
   end
-    
-let rec regs_to_stack xs = List.map (fun x -> X86Push x) xs, List.map (fun x -> X86Pop x) @@ List.rev xs
-                                       
-let compile_fdef env (name, args, s_body) =
-  env#clear;
-  List.iteri (fun ind arg -> env#set_local arg @@ F ind) @@ List.rev args;
-  let code = Compile.stack_program env s_body in
-  let prer, postr = regs_to_stack env#used_regs in
-  List.concat
-    [[X86Lbl name];
-     [X86Enter];
-     [X86Allocate env#allocated_total];
-     prer;
-     code;
-     postr;
-     [X86Leave];
-     [X86Ret]]
-      
-let compile_main env s_main =
-  env#clear;
-  let code = Compile.stack_program env s_main in
-  let prer, postr = regs_to_stack env#used_regs in
-  List.concat
-    [[X86Lbl "main"];
-     [X86Enter];
-     [X86Allocate env#allocated_total];
-     prer;
-     code;
-     postr;
-     [X86Binop ("@", eax, eax)];
-     [X86Leave];
-     [X86Ret]]
-      
-let compile prog =
-  let env = new env in
-  let (s_fdefs, s_main) = StackMachine.Compile.prog prog in
-  let asm = Buffer.create 1024 in
-  let (!!) s = Buffer.add_string asm s in
-  let (!) s = !!s; !!"\n" in
-  let add_asm list = List.iter (fun i -> !(Show.instr env i)) list in
-  !"\t.text";
-  !"\t.globl\tmain";
-  List.iter (fun s_fdef -> add_asm @@ compile_fdef env s_fdef) s_fdefs;
-  add_asm @@ compile_main env s_main;
-  !!"\n";
-  Buffer.contents asm
-                                                    
-let build stmt name =
-  let outf = open_out @@ Printf.sprintf "%s.s" name in
-  Printf.fprintf outf "%s" (compile stmt);
-  close_out outf;
-  let runtime_src =
-    try Sys.getenv "RUNTIME_SRC"
-    with Not_found -> failwith "Please, provide a path to runtime src in RUNTIME_SRC env"
-  in
-  let gcc_flags = "-g -Ofast" in
-  let runtime_o = Filename.concat runtime_src "runtime.o" in
-  ignore @@ Sys.command (Printf.sprintf "gcc %s -m32 -o %s %s %s.s" gcc_flags name runtime_o name)
+
+module Build =
+  struct
+    let regs_to_stack rs = List.map (fun x -> X86Push x) rs, List.map (fun x -> X86Pop x) @@ List.rev rs
+                                                                                                      
+    let compile_fdef env (name, args, s_body) =
+      env#clear;
+      List.iteri (fun ind arg -> env#set_local arg @@ F ind) @@ List.rev args;
+      let code = Compile.stack_program env s_body in
+      let prer, postr = regs_to_stack env#used_regs in
+      List.concat
+        [[X86Lbl name];
+         [X86Enter];
+         [X86Allocate env#allocated_total];
+         prer;
+         code;
+         postr;
+         [X86Leave];
+         [X86Ret]]
+        
+    let compile_main env s_main =
+      env#clear;
+      let code = Compile.stack_program env s_main in
+      let prer, postr = regs_to_stack env#used_regs in
+      List.concat
+        [[X86Lbl "main"];
+         [X86Enter];
+         [X86Allocate env#allocated_total];
+         prer;
+         code;
+         postr;
+         [X86Binop ("@", eax, eax)];
+         [X86Leave];
+         [X86Ret]]
+        
+    let compile prog =
+      let env = new env in
+      let (s_fdefs, s_main) = StackMachine.Compile.prog prog in
+      let asm = Buffer.create 1024 in
+      let (!!) s = Buffer.add_string asm s in
+      let (!) s = !!s; !!"\n" in
+      let add_asm list = List.iter (fun i -> !(Show.instr env i)) list in
+      !"\t.text";
+      !"\t.globl\tmain";
+      List.iter (fun s_fdef -> add_asm @@ compile_fdef env s_fdef) s_fdefs;
+      add_asm @@ compile_main env s_main;
+      !!"\n";
+      Buffer.contents asm
+                      
+    let run stmt name =
+      let outf = open_out @@ Printf.sprintf "%s.s" name in
+      Printf.fprintf outf "%s" (compile stmt);
+      close_out outf;
+      let runtime_src =
+        try Sys.getenv "RUNTIME_SRC"
+        with Not_found -> failwith "Please, provide a path to runtime src in RUNTIME_SRC env"
+      in
+      let gcc_flags = "-g -Ofast" in
+      let runtime_o = Filename.concat runtime_src "runtime.o" in
+      ignore @@ Sys.command (Printf.sprintf "gcc %s -m32 -o %s %s %s.s" gcc_flags name runtime_o name)
+  end

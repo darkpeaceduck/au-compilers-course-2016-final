@@ -17,7 +17,7 @@ let main =
 	 (match mode with
 	  | `X86 ->
              let basename = Filename.chop_suffix filename ".expr" in 
-	     X86.build prog basename
+	     X86.Build.run prog basename
           | `Parse -> PrettyPrinter.Print.prog prog
 	  | _ ->
 	     let rec read acc =

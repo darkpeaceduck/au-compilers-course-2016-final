@@ -14,6 +14,7 @@ module Instrs =
       | S_RET
       | S_END
       | S_POP
+(*| S_BUILTIN of string * int*)
   end
 
 module Interpreter =

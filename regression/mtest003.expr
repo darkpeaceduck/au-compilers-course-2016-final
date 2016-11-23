@@ -7,5 +7,5 @@ begin
     fi
 end
 
-read(x);
+x := read();
 write(fac(x));

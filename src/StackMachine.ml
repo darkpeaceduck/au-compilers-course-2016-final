@@ -1,35 +1,30 @@
 module Instrs =
   struct
     type t =
-      | S_READ
-      | S_WRITE
-      | S_PUSH of int
+      | S_PUSH of int       
+      | S_POP
       | S_LD of string (* put arg value on top of the stack, i.e. load *)
       | S_ST of string (* take value from top of the stack to the var, i.e. store *)
       | S_BINOP of string
       | S_LBL of string
       | S_JMP of string
       | S_CJMP of string * string
-      | S_CALL of string * string list
+      | S_CALL of string * string list 
+      | S_BUILTIN of string * int
       | S_RET
       | S_END
-      | S_POP
-(*| S_BUILTIN of string * int*)
   end
 
 module Interpreter =
   struct
     module M = BatMap.Make(String)
     class env code labels input = object
+      inherit Stdlib.coreio input
       val cn : Instrs.t array = Array.of_list code (* Instrs.t array of stack machine *)
       val lm : int M.t = labels (* label to line number map *)
       val sf : int M.t list ref = ref [M.empty] (* stack framse list *)
       val st : int list ref = ref [] (* stack *)
-      val is : int list ref = ref input (* input stream *)
-      val os : int list ref = ref [] (* output stream *)
       method get_ci ln = cn.(ln)
-      method read = let i::is' = !is in st := i::!st; is := is'
-      method write = let i::st' = !st in st := st'; os := i::!os
       method push n = st := n::!st
       method ld x = let vm::_ = !sf in st := (M.find x vm)::!st
       method st x = let (vm::sf', y::st') = (!sf, !st) in sf := (M.add x y vm)::sf'; st := st'
@@ -38,7 +33,6 @@ module Interpreter =
       method new_frame = sf := M.empty::!sf
       method del_frame = let _::sf' = !sf in sf := sf'
       method goto l = M.find l lm
-      method get_os = List.rev !os
     end
 
     let run input (s_fdefs, s_main) =
@@ -58,6 +52,12 @@ module Interpreter =
         | _ as i ->
            run' @@
              match i with
+             | S_PUSH n -> env#push n; ln + 1
+             | S_POP -> env#pop; ln + 1
+             | S_LD x -> env#ld x; ln + 1
+             | S_ST x -> env#st x; ln + 1
+             | S_BINOP o -> env#binop o; ln + 1
+             | S_LBL _ -> ln + 1
              | S_JMP l -> env#goto l
              | S_CJMP (c, l) -> if Op.eval_cjmp c @@ env#pop then env#goto l else (ln + 1)
              | S_CALL (name, args) ->
@@ -65,23 +65,16 @@ module Interpreter =
                 List.iter (fun arg -> env#st arg) args;
                 env#push (ln + 1);
                 env#goto name
+             | S_BUILTIN (name, argsn) ->
+                let args = BatList.init argsn (fun _ -> env#pop) in
+                env#push @@ env#builtin name args;
+                ln + 1
              | S_RET ->
                 env#del_frame;
                 let rv = env#pop in
                 let rln = env#pop in
                 env#push rv;
                 rln
-             | _ ->
-                (match i with
-                 | S_READ -> env#read
-                 | S_WRITE -> env#write
-                 | S_PUSH n -> env#push n
-                 | S_LD x -> env#ld x
-                 | S_ST x -> env#st x
-                 | S_BINOP o -> env#binop o
-                 | S_LBL _ -> ()
-                 | S_POP -> env#pop; ());
-                ln + 1
       in
       run' 0;
       env#get_os
@@ -94,7 +87,7 @@ module Compile =
       val fargs : string list M.t = fargs (* map for get func args *)
       val n : int ref = ref (-1) (* int for construct new lbl *)
       method new_lbl = n := !n + 1; Printf.sprintf "lbl%d" !n
-      method get_fargs name = M.find name fargs
+      method get_fargs name = try Some (M.find name fargs) with _ -> None
     end
                   
     let prog (fdefs, main) =
@@ -119,15 +112,16 @@ module Compile =
                 | _ -> List.concat [[S_PUSH 0]; bsum; [S_BINOP "<"]])
             | _ -> List.concat [le; re; [S_BINOP o]])
         | FCall (name, args) ->
-           (List.concat @@ List.rev @@ List.map (fun arg -> expr arg) args) @ [S_CALL (name, env#get_fargs name)]
+           (List.concat @@ List.rev @@ List.map (fun arg -> expr arg) args) @
+             match env#get_fargs name with
+             | Some fargs -> [S_CALL (name, fargs)]
+             | None -> [S_BUILTIN (name, List.length args)]
       in
       let rec stmt =
         let open Language.Stmt in
         function
         | Skip -> []
         | Assign (x, e) -> expr e @ [S_ST x]
-        | Read x -> [S_READ; S_ST x]
-        | Write e -> expr e @ [S_WRITE]
         | Seq (l, r) -> stmt l @ stmt r
         | While _ | If _ as cyc ->
            let lbl1, lbl2 = env#new_lbl, env#new_lbl in

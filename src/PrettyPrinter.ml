@@ -20,8 +20,6 @@ end =
         | Skip -> doind n; !"Skip "; !"\n"
         | Seq (l, r) -> stmt' n l; stmt' n r
         | Assign (x, e) -> doind n; !x; !" := "; expr e; !"\n"
-        | Write e -> doind n; !"Write ("; expr e; !")\n"
-        | Read x -> doind n; !"Read "; !x; !"\n"
         | While (e, s) -> doind n; !"While "; expr e; !" do"; !"\n"; n := (BatRef.get n) + 3; stmt' n s; n := (BatRef.get n) - 3; doind n; !"od"; !"\n"
         | If (e, s1, s2) -> doind n; !"If "; expr e; !" then\n"; n := (BatRef.get n) + 3; stmt' n s1; n := (BatRef.get n) - 3; doind n;
                             !"else\n"; n := (BatRef.get n) + 3; stmt' n s2; n := (BatRef.get n) - 3; doind n; !"fi\n"
@@ -34,8 +32,6 @@ end =
     let ints l = List.iter (fun i -> Printf.printf "%d\n" i) l
     let instr (instr : StackMachine.Instrs.t) =
       match instr with
-      | S_READ -> "S_READ"
-      | S_WRITE -> "S_WRITE"
       | S_PUSH n -> Printf.sprintf "S_PUSH %d" n
       | S_LD s -> "S_LD " ^ s
       | S_ST s -> "S_ST " ^ s

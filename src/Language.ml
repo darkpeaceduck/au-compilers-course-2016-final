@@ -12,8 +12,6 @@ module Stmt =
     type t =
       | Skip
       | Assign of string * Expr.t
-      | Read of string
-      | Write of Expr.t
       | Seq of t * t
       | While of Expr.t * t
       | If of Expr.t * t * t

@@ -134,23 +134,28 @@ module Compile =
 	| [] | (S_END)::_ -> []
 	| i::code' ->
 	   let (stack', x86code) =
-             let nil = [], [] in
-             let ($) (pre, post) opnd = pre @ [X86Push opnd], [X86Pop opnd] @ post in
              let mov_w_reg ?(r=eax) f t =
                match f, t with
                | R _, _ | _, R _ -> [X86Binop ("->", f, t)]
                | _ -> [X86Binop ("->", f, r); X86Binop ("->", r, t)]
              in
+             let rec precall num stack =
+               match num with
+               | 0 ->
+                  let s = env#allocate stack in
+                  (env#push stack s, [], [X86Binop ("->", eax, s)])
+               | n ->
+                  let s, stack' = env#pop stack in
+                  let stack', pre, post = precall (num - 1) stack' in
+                  (stack', (X86Push s)::pre, (X86Pop eax)::post)
+             in
              match i with
-             | S_READ ->
-                let s = env#allocate stack in
-                (env#push stack s, [X86Call "read"; X86Binop ("->", eax, s)])
-             | S_WRITE ->
-                let s, stack' = env#pop stack in
-                (stack', [X86Push s; X86Call "write"; X86Pop s])
              | S_PUSH n ->
                 let s = env#allocate stack in
                 (env#push stack s, [X86Binop ("->", L n, s)])
+             | S_POP ->
+                let _, stack' = env#pop stack in
+                (stack', [])
              | S_LD x ->
                 let m = env#get_local x in
                 let s = env#allocate stack in
@@ -192,25 +197,15 @@ module Compile =
              | S_CJMP (c, l) ->
                 let s, stack' = env#pop stack in
                 (stack', [X86Binop ("->", s, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)])
-             | S_CALL (name, args) ->
-                let rec precall num stack =
-                  match num with
-                  | 0 ->
-                     let s = env#allocate stack in
-                     (env#push stack s, [], [X86Binop ("->", eax, s)])
-                  | n ->
-                     let s, stack' = env#pop stack in
-                     let stack', pre, post = precall (num - 1) stack' in
-                     (stack', (X86Push s)::pre, (X86Pop eax)::post)
-                in
+             | S_CALL (name, args) -> 
                 let stack', pre, post = precall (List.length args) stack in
+                (stack', List.concat [pre; [X86Call name]; List.rev post])
+             | S_BUILTIN (name, argsn) ->
+                let stack', pre, post = precall argsn stack in
                 (stack', List.concat [pre; [X86Call name]; List.rev post])
              | S_RET ->
                 let s, stack' = env#pop stack in
                 (stack', [X86Binop ("->", s, eax)])
-             | S_POP ->
-                let _, stack' = env#pop stack in
-                (stack', [])
            in
 	   x86code @ (compile stack' code')
       in

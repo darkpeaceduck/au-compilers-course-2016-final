@@ -9,5 +9,5 @@ begin
     fi
 end
 
-read(x);
+x := read();
 write(fib(x));

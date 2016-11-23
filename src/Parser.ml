@@ -38,8 +38,6 @@ module Stmt =
       expr: !(Expr.parse);
       simple:
         x:IDENT s:(":=" e:expr {Assign (x, e)} | "(" args:!(Util.list0 expr) ")" {FCall (x, args)}) {s}
-        | %"read" "(" x:IDENT ")" {Read x}
-        | %"write" "(" e:expr ")" {Write e}
         | %"skip" {Skip}
         | %"while" e:expr %"do" s:parse %"od" {While (e, s)}
         | %"if" e:expr %"then" the:parse
@@ -87,7 +85,7 @@ module File =
         (object
            inherit Matcher.t s
            inherit Util.Lexers.ident
-                     ["read"; "write"; "skip"; (* basic *)
+                     ["skip"; (* basic *)
                       "if"; "then"; "elif"; "else"; "fi"; (* if *)
                       "while"; "do"; "od"; "repeat"; "until"; "for"; (* loops *)
                       "fun"; "begin"; "end"; "return"] (* fun *)

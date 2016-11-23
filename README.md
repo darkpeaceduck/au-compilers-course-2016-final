@@ -9,6 +9,7 @@ What do we have so far:
 binops                            | [x]          | [x]           | [x] |
 if/while/for/repeat control flows | [x]          | [x]           | [x] |
 funcs                             | [x]          | [x]           | [x] |
+builtins                          | [x]          | [x]           | [x] |
 
 ## todo
 

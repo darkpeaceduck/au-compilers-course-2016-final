@@ -1,7 +1,9 @@
+module V = Language.Value
+
 module Instrs =
   struct
     type t =
-      | S_PUSH of int       
+      | S_PUSH of V.t  
       | S_POP
       | S_LD of string (* put arg value on top of the stack, i.e. load *)
       | S_ST of string (* take value from top of the stack to the var, i.e. store *)
@@ -22,8 +24,8 @@ module Interpreter =
       inherit Stdlib.coreio input
       val cn : Instrs.t array = Array.of_list code (* Instrs.t array of stack machine *)
       val lm : int M.t = labels (* label to line number map *)
-      val sf : int M.t list ref = ref [M.empty] (* stack framse list *)
-      val st : int list ref = ref [] (* stack *)
+      val sf : V.t M.t list ref = ref [M.empty] (* stack framse list *)
+      val st : V.t list ref = ref [] (* stack *)
       method get_ci ln = cn.(ln)
       method push n = st := n::!st
       method ld x = let vm::_ = !sf in st := (M.find x vm)::!st
@@ -59,11 +61,11 @@ module Interpreter =
              | S_BINOP o -> env#binop o; ln + 1
              | S_LBL _ -> ln + 1
              | S_JMP l -> env#goto l
-             | S_CJMP (c, l) -> if Op.eval_cjmp c @@ env#pop then env#goto l else (ln + 1)
+             | S_CJMP (c, l) -> if V.to_bool @@ Op.eval_cjmp c @@ env#pop then env#goto l else (ln + 1)
              | S_CALL (name, args) ->
                 env#new_frame;
                 List.iter (fun arg -> env#st arg) args;
-                env#push (ln + 1);
+                env#push @@ V.Int (ln + 1);
                 env#goto name
              | S_BUILTIN (name, argsn) ->
                 let args = BatList.init argsn (fun _ -> env#pop) in
@@ -74,7 +76,7 @@ module Interpreter =
                 let rv = env#pop in
                 let rln = env#pop in
                 env#push rv;
-                rln
+                V.to_int rln
       in
       run' 0;
       env#get_os
@@ -105,11 +107,11 @@ module Compile =
            let le, re = expr l, expr r in
            (match o with
             | "&&" | "!!" ->
-               let bsum = List.concat [[S_PUSH 0]; le; [S_BINOP "!="]; [S_PUSH 0]; re; [S_BINOP "!="]; [S_BINOP "+"]]
+               let bsum = List.concat [[S_PUSH V.zero]; le; [S_BINOP "!="]; [S_PUSH V.zero]; re; [S_BINOP "!="]; [S_BINOP "+"]]
                in
                (match o with
-                | "&&" -> List.concat [[S_PUSH 2]; bsum; [S_BINOP "=="]]
-                | _ -> List.concat [[S_PUSH 0]; bsum; [S_BINOP "<"]])
+                | "&&" -> List.concat [[S_PUSH (V.Int 2)]; bsum; [S_BINOP "=="]]
+                | _ -> List.concat [[S_PUSH V.zero]; bsum; [S_BINOP "<"]])
             | _ -> List.concat [le; re; [S_BINOP o]])
         | FCall (name, args) ->
            (List.concat @@ List.rev @@ List.map (fun arg -> expr arg) args) @
@@ -136,4 +138,3 @@ module Compile =
       let fdef (name, args, body) = name, args, stmt body in
       List.map (fun fd -> fdef fd) fdefs, stmt main @ [S_END]
   end
-    

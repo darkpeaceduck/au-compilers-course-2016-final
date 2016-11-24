@@ -1,4 +1,4 @@
-module Print : sig
+(*module Print : sig
   val prog : Language.Prog.t -> unit
   val ints : int list -> unit
   val instrs : StackMachine.Instrs.t list -> unit
@@ -43,4 +43,4 @@ end =
       | S_RET -> "S_RET"
       | S_END -> "S_END"
     let instrs l = List.iter (fun i -> Printf.printf "%s\n" (instr i)) l
-  end
+  end*)

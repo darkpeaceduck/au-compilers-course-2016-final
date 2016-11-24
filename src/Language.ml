@@ -1,7 +1,24 @@
+module Value =
+  struct
+    type t =
+      | Int of int
+      | String of bytes
+                    
+    let zero, one = Int 0, Int 1
+                               
+    let to_int = function
+      | Int i -> i
+      | _ -> failwith "Not an Int!"
+
+    let to_bool = function
+      | Int i -> i <> 0
+      | _ -> failwith "Not an Int!"
+  end
+
 module Expr =
   struct
     type t =
-      | Const of int
+      | Const of Value.t
       | Var of string
       | Binop of string * t * t
       | FCall of string * t list
@@ -28,3 +45,4 @@ module Prog =
   struct
     type t = FDef.t list * Stmt.t
   end
+    

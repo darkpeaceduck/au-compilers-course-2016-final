@@ -6,43 +6,11 @@ type opnd =
   | S of int (* stack, 0.. *)
   | L of int (* const, int *)
            
-let regs32 = [|
-    "%eax";
-    "%ecx";
-    "%edx";
-    "%ebx";
-    "%esp";
-    "%ebp";
-    "%esi";
-    "%edi";
-  |]
-let eax = R 0
-let ecx = R 1
-let edx = R 2
-let ebx = R 3
-let esp = R 4
-let ebp = R 5
-let esi = R 6
-let edi = R 7
+let regs32 = [|"%eax"; "%ecx"; "%edx"; "%ebx"; "%esp"; "%ebp"; "%esi"; "%edi"|]
+let eax, ecx, edx, ebx, esp, ebp, esi, edi = R 0, R 1, R 2, R 3, R 4, R 5, R 6, R 7
             
-let regs8 = [|
-    "%ah";
-    "%al";
-    "%ch";
-    "%cl";
-    "%dh";
-    "%dl";
-    "%bh";
-    "%bl";
-  |]          
-let ah = R8 0
-let al = R8 1
-let ch = R8 2
-let cl = R8 3
-let dh = R8 4
-let dl = R8 5
-let bh = R8 6
-let bl = R8 7
+let regs8 = [| "%ah"; "%al"; "%ch"; "%cl"; "%dh"; "%dl"; "%bh"; "%bl"|]          
+let ah, al, ch, cl, dh, dl, bh, bl = R8 0, R8 1, R8 2, R8 3, R8 4, R8 5, R8 6, R8 7
                             
 let word_size = 4
                   
@@ -61,6 +29,7 @@ type instr =
   | X86Leave
   | X86Ret
   | X86Allocate of int
+  | X86Free of int
 
 module S =
   BatSet.Make
@@ -78,6 +47,7 @@ class env = object(self)
   val free_regs : S.t ref = ref saved_regs (* caller free regs *)
   val used_regs : S.t ref = ref S.empty (* set of used regs *)
   method used_regs = S.to_list !used_regs
+  method used_regs_num = List.length self#used_regs
   method private get_free_reg_option =
     try Some (S.min_elt !free_regs)
     with Not_found -> None
@@ -127,8 +97,9 @@ end
 
 module Compile =
   struct
-    open StackMachine.Instrs
     let stack_program env code =
+      let open StackMachine.Instrs in
+      let module V = Language.Value in
       let rec compile stack code =
 	match code with
 	| [] | (S_END)::_ -> []
@@ -152,7 +123,7 @@ module Compile =
              match i with
              | S_PUSH n ->
                 let s = env#allocate stack in
-                (env#push stack s, [X86Binop ("->", L n, s)])
+                (env#push stack s, [X86Binop ("->", L (V.to_int n), s)])
              | S_POP ->
                 let _, stack' = env#pop stack in
                 (stack', [])
@@ -176,13 +147,7 @@ module Compile =
                        | _ -> [X86Binop ("->", r, eax)], [X86Binop ("->", eax, r)], l, eax
                      in
                      pre @ [X86Binop (o, l', r')] @ post
-                  | "/" | "%" ->
-                     let mr o =
-                       match o with
-                       | "/" -> eax
-                       | "%" -> edx
-                     in
-                     [X86Binop ("->", r, eax); X86Cdq; X86Div l; X86Binop ("->", mr o, r)]
+                  | "/" | "%" -> [X86Binop ("->", r, eax); X86Cdq; X86Div l; X86Binop ("->", (if o = "/" then eax else edx), r)]
                   | _ ->
                      let pre, post, l', r' =
                        match l, r with
@@ -248,53 +213,56 @@ module Show =
         let (!) xs = String.concat "\n" @@ List.map (fun i -> instr' i) xs in
         function
         | X86Binop (o, x, y) -> Printf.sprintf "\t%s\t%s,\t%s" (binop_to_x86 o) (opnd x) (opnd y)
-        | X86Div x           -> Printf.sprintf "\tidivl\t%s" (opnd x)
-        | X86Push x          -> Printf.sprintf "\tpushl\t%s" (opnd x)
-        | X86Pop x           -> Printf.sprintf "\tpopl\t%s" (opnd x)
-        | X86Cdq             -> "\tcdq"
-        | X86Set (o, x)      -> Printf.sprintf "\tset%s\t%s" (set_to_x86 o) (opnd x)
-        | X86Call l          -> Printf.sprintf "\tcall\t%s" l
-        | X86Lbl l           -> Printf.sprintf "%s:" l
-        | X86Jmp l           -> Printf.sprintf "\tjmp\t%s" l
-        | X86CJmp (c, l)     -> Printf.sprintf "\tj%s\t%s" (cjmp_to_x86 c) l
-        | X86Enter           -> ![X86Push ebp; X86Binop ("->", esp, ebp)]
-        | X86Leave           -> "\tleave"
-        | X86Ret             -> "\tret"
-        | X86Allocate n      -> ![X86Binop ("-", L (n * word_size), esp)]
+        | X86Div x -> Printf.sprintf "\tidivl\t%s" (opnd x)
+        | X86Push x -> Printf.sprintf "\tpushl\t%s" (opnd x)
+        | X86Pop x -> Printf.sprintf "\tpopl\t%s" (opnd x)
+        | X86Cdq -> "\tcdq"
+        | X86Set (o, x) -> Printf.sprintf "\tset%s\t%s" (set_to_x86 o) (opnd x)
+        | X86Call l -> Printf.sprintf "\tcall\t%s" l
+        | X86Lbl l -> Printf.sprintf "%s:" l
+        | X86Jmp l -> Printf.sprintf "\tjmp\t%s" l
+        | X86CJmp (c, l) -> Printf.sprintf "\tj%s\t%s" (cjmp_to_x86 c) l
+        | X86Enter -> ![X86Push ebp; X86Binop ("->", esp, ebp)]
+        | X86Leave -> "\tleave"
+        | X86Ret -> "\tret"
+        | X86Allocate n -> ![X86Binop ("-", L (n * word_size), esp)]
+        | X86Free n -> ![X86Binop ("+", L (n * word_size), esp)]
       in
       instr' i
   end
 
 module Build =
   struct
-    let regs_to_stack rs = List.map (fun x -> X86Push x) rs, List.map (fun x -> X86Pop x) @@ List.rev rs
+    let regs_to_stack regs = List.map (fun x -> X86Push x) regs, List.map (fun x -> X86Pop x) @@ List.rev regs
                                                                                                       
     let compile_fdef env (name, args, s_body) =
       env#clear;
       List.iteri (fun ind arg -> env#set_local arg @@ F ind) @@ List.rev args;
       let code = Compile.stack_program env s_body in
-      let prer, postr = regs_to_stack env#used_regs in
+      let push_regs, pop_regs = regs_to_stack env#used_regs in
       List.concat
         [[X86Lbl name];
          [X86Enter];
+         push_regs;
          [X86Allocate env#allocated_total];
-         prer;
          code;
-         postr;
+         [X86Free env#allocated_total];
+         pop_regs;
          [X86Leave];
          [X86Ret]]
         
     let compile_main env s_main =
       env#clear;
       let code = Compile.stack_program env s_main in
-      let prer, postr = regs_to_stack env#used_regs in
+      let push_regs, pop_regs = regs_to_stack env#used_regs in
       List.concat
         [[X86Lbl "main"];
          [X86Enter];
+         push_regs;
          [X86Allocate env#allocated_total];
-         prer;
          code;
-         postr;
+         [X86Free env#allocated_total];
+         pop_regs;
          [X86Binop ("@", eax, eax)];
          [X86Leave];
          [X86Ret]]

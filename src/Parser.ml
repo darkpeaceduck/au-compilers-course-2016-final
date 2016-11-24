@@ -1,32 +1,43 @@
 open Ostap
 open Matcher
 
+module Value =
+  struct
+    open Language.Value
+    ostap (
+      parse:
+        n:DECIMAL {Int n}
+      | c:CHAR {Int (Char.code c)}
+      | -"\"" s:STRING - "\"" {String s} 
+    )
+  end
+       
 module Expr =
   struct
     open Language.Expr
     ostap (
       parse:
-      !(Ostap.Util.expr
-        (fun x -> x)
-        (Array.map
-          (
-            fun (a, s) ->
-            a, List.map (fun s -> ostap(- $(s)), (fun x y -> Binop (s, x, y))) s
+        !(Ostap.Util.expr
+          (fun x -> x)
+          (Array.map
+            (
+              fun (a, s) ->
+              a, List.map (fun s -> ostap(- $(s)), (fun x y -> Binop (s, x, y))) s
+            )
+            [|
+            `Lefta, ["!!"];
+            `Lefta, ["&&"];
+            `Nona , ["=="; "!="; "<="; "<"; ">="; ">"];
+            `Lefta, ["+" ; "-"];
+            `Lefta, ["*" ; "/"; "%"];
+            |]
           )
-          [|
-          `Lefta, ["!!"];
-          `Lefta, ["&&"];
-          `Nona , ["=="; "!="; "<="; "<"; ">="; ">"];
-          `Lefta, ["+" ; "-"];
-          `Lefta, ["*" ; "/"; "%"];
-          |]
-        )
-        primary
-      );
-      primary:
-        n:DECIMAL {Const n}
-        | f:IDENT args:(-"(" !(Util.list0 parse) -")")? { match args with | None -> Var f | Some args -> FCall (f, args) }
-        | -"(" parse -")"                                              
+          primary
+        );
+        primary:
+          v:!(Value.parse) {Const v}
+          | f:IDENT args:(-"(" !(Util.list0 parse) -")")? { match args with | None -> Var f | Some args -> FCall (f, args) }
+          | -"(" parse -")"                                              
     )
   end
     
@@ -51,7 +62,7 @@ module Stmt =
               (match ele with | None -> Skip | Some s -> s)
             )
          }
-        | %"repeat" s:parse %"until" e:expr {Seq (s, While (Binop ("==", e, Const 0), s))}
+        | %"repeat" s:parse %"until" e:expr {Seq (s, While (Binop ("==", e, Const Language.Value.zero), s))}
         | %"for" i:parse "," c:expr "," s:parse %"do" b:parse %"od" {Seq (i, While (c, Seq (b, s)))}
         | %"return" e:expr {Return (e)}
     )
@@ -91,6 +102,8 @@ module File =
                       "fun"; "begin"; "end"; "return"] (* fun *)
                      s
            inherit Util.Lexers.decimal s
+           inherit Util.Lexers.char s
+           inherit Util.Lexers.string s                         
            inherit Util.Lexers.skip
                      [Matcher.Skip.whitespaces " \t\n";
 	              Matcher.Skip.lineComment "--";

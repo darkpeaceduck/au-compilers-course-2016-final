@@ -1,8 +1,10 @@
+module V = Language.Value
+
 module M = BatMap.Make(String)
 class env input = object
   inherit Stdlib.coreio input
-  val sf : int M.t list ref = ref [M.empty] (* stack frames *)
-  val funcs : (int list -> int) M.t ref = ref M.empty (* funcs map *)
+  val sf : V.t M.t list ref = ref [M.empty] (* stack frames *)
+  val funcs : (V.t list -> V.t) M.t ref = ref M.empty (* funcs map *)
   method new_frame = sf := M.empty::!sf
   method del_frame = let _::sf' = !sf in sf := sf'
   method get_v x = let vm::_ = !sf in M.find x vm
@@ -31,10 +33,10 @@ let run input (fdefs, main) =
     | Skip -> None
     | Assign(x, e) -> env#set_v x @@ expr e; None
     | Seq (l, r) -> (match stmt l with | None -> stmt r | Some _ as res -> res)
-    | While (e, s) as st -> if (expr e <> 0) then stmt @@ Seq (s, st) else None
-    | If (e, s1, s2) -> stmt @@ if (expr e <> 0) then s1 else s2
+    | While (e, s) as st -> if (V.to_bool @@ Op.eval_binop "!=" (expr e) V.zero) then stmt @@ Seq (s, st) else None
+    | If (e, s1, s2) -> stmt @@ if (V.to_bool @@ Op.eval_binop "!=" (expr e) V.zero) then s1 else s2
     | FCall (name, args) -> expr @@ Language.Expr.FCall (name, args); None
-    | Return e -> BatOption.some @@ expr e
+    | Return e -> Some (expr e)
   in
   let to_exec (name, args, body) = fun vals ->
     env#new_frame;

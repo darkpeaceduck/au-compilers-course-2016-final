@@ -1,4 +1,9 @@
 # simple-compiler
+
+- [about](#about)
+- [todo](#todo)
+- [syntax](#syntax)
+
 ## about
 
 Implementing a simple language.

@@ -6,9 +6,11 @@ module Value =
     open Language.Value
     ostap (
       parse:
-        n:DECIMAL {Int n}
+        "true" {Int 1}
+      | "false" {Int 0}
+      | n:DECIMAL {Int n}
       | c:CHAR {Int (Char.code c)}
-      | -"\"" s:STRING - "\"" {String s} 
+      | s:STRING {String (Bytes.sub s 1 @@ Bytes.length s - 2)} 
     )
   end
        

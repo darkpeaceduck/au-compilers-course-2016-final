@@ -19,19 +19,19 @@ DIFLAGS=
 
 CMP := native
 
-byte:
+byte, b:
 	@: $(eval export CMP=byte)
 
-native:
+native, n:
 	@: $(eval export CMP=native)
 
-check: $(TESTS)
+check, a: $(TESTS)
 
-int: $(TESTSI)
+int, i: $(TESTSI)
 
-stack: $(TESTSS)
+stack, s: $(TESTSS)
 
-x86: $(TESTSO)
+x86, o: $(TESTSO)
 
 $(TESTS): %: %.expr
 	@$(MAKE) -f $(THIS_FILE) --no-print-directory $@.i
@@ -51,5 +51,5 @@ $(TESTSO): %.o: %.expr
 	$(eval FILE:=$(basename $@))
 	../rc.$(CMP) -o $< && cat $(FILE).input | ./$(FILE) > $(FILE).log && diff $(DIFLAGS) $(FILE).log orig/$(FILE).log
 
-clean:
+clean, c:
 	rm -f *.log *.s *~ $(TESTS)

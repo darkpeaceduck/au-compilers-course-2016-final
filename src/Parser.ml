@@ -6,8 +6,8 @@ module Value =
     open Language.Value
     ostap (
       parse:
-      %"true" {Int 1}
-      | %"false" {Int 0}
+        %"true" {one}
+      | %"false" {zero}
       | n:DECIMAL {Int n}
       | c:CHAR {Int (Char.code c)}
       | s:STRING {String (Bytes.sub s 1 @@ Bytes.length s - 2)} 

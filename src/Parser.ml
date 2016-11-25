@@ -6,8 +6,8 @@ module Value =
     open Language.Value
     ostap (
       parse:
-        "true" {Int 1}
-      | "false" {Int 0}
+      %"true" {Int 1}
+      | %"false" {Int 0}
       | n:DECIMAL {Int n}
       | c:CHAR {Int (Char.code c)}
       | s:STRING {String (Bytes.sub s 1 @@ Bytes.length s - 2)} 
@@ -98,7 +98,7 @@ module File =
         (object
            inherit Matcher.t s
            inherit Util.Lexers.ident
-                     ["skip"; (* basic *)
+                     ["skip"; "true"; "false"; (* basic *)
                       "if"; "then"; "elif"; "else"; "fi"; (* if *)
                       "while"; "do"; "od"; "repeat"; "until"; "for"; (* loops *)
                       "fun"; "begin"; "end"; "return"] (* fun *)

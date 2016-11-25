@@ -10,6 +10,7 @@ binops                            | [x]          | [x]           | [x] |
 if/while/for/repeat control flows | [x]          | [x]           | [x] |
 funcs                             | [x]          | [x]           | [x] |
 builtins                          | [x]          | [x]           | [x] |
+strings                           | [x]          | [x]           | [ ] |
 
 ## todo
 
@@ -27,3 +28,33 @@ builtins                          | [x]          | [x]           | [x] |
 - [x] эффективная конкатенация строк
 - [ ] тесты в performance (они замеряют в x86)
 - [ ] реализовать функции в PrettyPrinter.ml
+
+## syntax
+
+### io
+
+	x := read();
+	write(x);
+
+### binops
+
+	+ - * / % <= < == != >= > !! &&
+
+### control flows
+
+	if expr then stmt else stmt fi
+	while expr do stmt od
+	repeat stmt until expr
+	for stmt, expr, stmt do stmt od
+
+### funcs
+
+	fun name([args]) begin stmt end
+
+### strings/chars
+
+	"abracadabra" 'a'
+
+### builtins
+
+	n := strlen("abra")

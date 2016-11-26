@@ -1,21 +1,30 @@
 module V = Language.Value
-class coreio input = object(self)
+module M = BatMap.Make(String)
+class core input = object(self)
+  (* IO *)
   val is : int list ref = ref input (* input stream *)
   val os : int list ref = ref [] (* output stream *)
   method private read = let i::is' = !is in is := is'; i
   method private write x = os := x::!os
   method get_os = List.rev !os
-  method builtin name args =
-    match name, args with
-    | "read", [] -> V.Int (self#read)
-    | "write", [V.Int x] -> self#write x; V.Int (String.length @@ BatInt.to_string x)
-    | "strmake", [V.Int n; V.Int c] -> V.String (Bytes.make n @@ Char.chr c)
-    | "strset", [V.String s as ss; V.Int i; V.Int c] -> Bytes.set s i @@ Char.chr c; ss
-    | "strget", [V.String s; V.Int i] -> V.Int (Char.code @@ Bytes.get s i)
-    | "strdup", [V.String s] -> V.String (Bytes.copy s)
-    | "strcat", [V.String s1; V.String s2] -> V.String (Bytes.cat s1 s2)
-    | "strcmp", [V.String s1; V.String s2] -> V.Int (Bytes.compare s1 s2)
-    | "strlen", [V.String s] -> V.Int (Bytes.length s)
-    | "strsub", [V.String s; V.Int i; V.Int l] -> V.String (Bytes.sub s i l)
-    | _ -> raise Not_found
+  (* BUILTIN *)
+  val mutable bi : (V.t list -> V.t) M.t = M.empty
+  method builtin name = M.find name bi
+  method get_bulitins_list = BatEnum.fold (fun l k -> k::l) [] @@ M.keys bi
+  initializer
+    bi <-
+      List.fold_left
+        (fun m (n, f) -> M.add n f m) M.empty
+        [("read", function | [] -> V.Int (self#read));
+         ("write", function | [V.Int x] -> self#write x; V.Int (String.length @@ BatInt.to_string x));
+         ("strmake", function | [V.Int n; V.Int c] -> V.String (Bytes.make n @@ Char.chr c));
+         ("strset", function | [V.String s as ss; V.Int i; V.Int c] -> Bytes.set s i @@ Char.chr c; ss);
+         ("strget", function | [V.String s; V.Int i] -> V.Int (Char.code @@ Bytes.get s i));
+         ("strdup", function | [V.String s] -> V.String (Bytes.copy s));
+         ("strcat", function | [V.String s1; V.String s2] -> V.String (Bytes.cat s1 s2));
+         ("strcmp", function | [V.String s1; V.String s2] -> V.Int (Bytes.compare s1 s2));
+         ("strlen", function | [V.String s] -> V.Int (Bytes.length s));
+         ("strsub", function | [V.String s; V.Int i; V.Int l] -> V.String (Bytes.sub s i l))]
 end
+                     
+let get_builtins_list = (new core [])#get_bulitins_list

@@ -13,25 +13,37 @@ TESTSO=$(addsuffix .o, $(TESTS))
 
 DIFLAGS=
 
-.PHONY: byte native check int stack x86 $(TESTS) $(TESTSI) $(TESTSS) $(TESTSO)
+.PHONY: byte native check int stack x86 $(TESTS) $(TESTSI) $(TESTSS) $(TESTSO) b n a i s o c
 
 .DEFAULT_GOAL := check
 
 CMP := native
 
-byte, b:
+byte: _byte
+b: _byte
+_byte:
 	@: $(eval export CMP=byte)
 
-native, n:
+native: _native
+n: _native
+_native:
 	@: $(eval export CMP=native)
 
-check, a: $(TESTS)
+check: _check
+a: _check
+_check: $(TESTS)
 
-int, i: $(TESTSI)
+int: _int
+i: _int
+_int: $(TESTSI)
 
-stack, s: $(TESTSS)
+stack: _stack
+s: _stack
+_stack: $(TESTSS)
 
-x86, o: $(TESTSO)
+x86: _x86
+o: _x86
+_x86: $(TESTSO)
 
 $(TESTS): %: %.expr
 	@$(MAKE) -f $(THIS_FILE) --no-print-directory $@.i
@@ -51,5 +63,7 @@ $(TESTSO): %.o: %.expr
 	$(eval FILE:=$(basename $@))
 	../rc.$(CMP) -o $< && cat $(FILE).input | ./$(FILE) > $(FILE).log && diff $(DIFLAGS) $(FILE).log orig/$(FILE).log
 
-clean, c:
+clean: _clean
+c: _clean
+_clean:
 	rm -f *.log *.s *~ $(TESTS)

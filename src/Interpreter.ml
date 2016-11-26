@@ -2,7 +2,7 @@ module V = Language.Value
 
 module M = BatMap.Make(String)
 class env input = object
-  inherit Stdlib.coreio input
+  inherit Stdlib.core input
   val sf : V.t M.t list ref = ref [M.empty] (* stack frames *)
   val funcs : (V.t list -> V.t) M.t ref = ref M.empty (* funcs map *)
   method new_frame = sf := M.empty::!sf

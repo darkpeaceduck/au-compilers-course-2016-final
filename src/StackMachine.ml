@@ -21,7 +21,7 @@ module Interpreter =
   struct
     module M = BatMap.Make(String)
     class env code labels input = object
-      inherit Stdlib.coreio input
+      inherit Stdlib.core input
       val cn : Instrs.t array = Array.of_list code (* Instrs.t array of stack machine *)
       val lm : int M.t = labels (* label to line number map *)
       val sf : V.t M.t list ref = ref [M.empty] (* stack framse list *)
@@ -64,12 +64,12 @@ module Interpreter =
              | S_CJMP (c, l) -> if V.to_bool @@ Op.eval_cjmp c @@ env#pop then env#goto l else (ln + 1)
              | S_CALL (name, args) ->
                 env#new_frame;
-                List.iter (fun arg -> env#st arg) args;
+                List.iter (fun arg -> env#st arg) @@ List.rev args;
                 env#push @@ V.Int (ln + 1);
                 env#goto name
              | S_BUILTIN (name, argsn) ->
                 let args = BatList.init argsn (fun _ -> env#pop) in
-                env#push @@ env#builtin name args;
+                env#push @@ env#builtin name @@ List.rev args;
                 ln + 1
              | S_RET ->
                 env#del_frame;
@@ -114,7 +114,7 @@ module Compile =
                 | _ -> List.concat [[S_PUSH V.zero]; bsum; [S_BINOP "<"]])
             | _ -> List.concat [le; re; [S_BINOP o]])
         | FCall (name, args) ->
-           (List.concat @@ List.rev @@ List.map (fun arg -> expr arg) args) @
+           (List.concat @@ List.map (fun arg -> expr arg) args) @
              match env#get_fargs name with
              | Some fargs -> [S_CALL (name, fargs)]
              | None -> [S_BUILTIN (name, List.length args)]

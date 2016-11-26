@@ -5,6 +5,7 @@ type opnd =
   | M of int (* local var with identifier, 0.. *)
   | S of int (* stack, 0.. *)
   | L of int (* const, int *)
+  | D of string (* data, 0.. *)
            
 let regs32 = [|"%eax"; "%ecx"; "%edx"; "%ebx"; "%esp"; "%ebp"; "%esi"; "%edi"|]
 let eax, ecx, edx, ebx, esp, ebp, esi, edi = R 0, R 1, R 2, R 3, R 4, R 5, R 6, R 7
@@ -93,6 +94,10 @@ class env = object(self)
     method allocated_total = self#allocated_local + self#allocated_stack_max
     (* CLEAR *)
     method clear = free_regs := saved_regs; used_regs := S.empty; local_vars := M.empty; allocated_local := 0; allocated_stack_max := 0
+    (* STRINGS *)
+    val data : (string * string) list ref = ref [] (* used data, only strings so far *)
+    method add_string s = data := ("string", s)::!data; D (Printf.sprintf "string%d" @@ List.length !data - 1)
+    method used_data = List.rev !data
 end
 
 module Compile =
@@ -118,12 +123,15 @@ module Compile =
                | n ->
                   let s, stack' = env#pop stack in
                   let stack', pre, post = precall (num - 1) stack' in
-                  (stack', (X86Push s)::pre, (X86Pop eax)::post)
+                  (stack', (X86Push s)::pre, post)
              in
              match i with
              | S_PUSH n ->
                 let s = env#allocate stack in
-                (env#push stack s, [X86Binop ("->", L (V.to_int n), s)])
+                (env#push stack s,
+                 match n with
+                 | V.Int i -> [X86Binop ("->", L i, s)]
+                 | V.String st -> [X86Binop ("->", env#add_string st, s)])
              | S_POP ->
                 let _, stack' = env#pop stack in
                 (stack', [])
@@ -164,10 +172,10 @@ module Compile =
                 (stack', [X86Binop ("->", s, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)])
              | S_CALL (name, args) -> 
                 let stack', pre, post = precall (List.length args) stack in
-                (stack', List.concat [pre; [X86Call name]; List.rev post])
+                (stack', List.concat [pre; [X86Call name; X86Free (List.length pre)]; post])
              | S_BUILTIN (name, argsn) ->
                 let stack', pre, post = precall argsn stack in
-                (stack', List.concat [pre; [X86Call name]; List.rev post])
+                (stack', List.concat [pre; [X86Call ("L"^name); X86Free (List.length pre)]; post])
              | S_RET ->
                 let s, stack' = env#pop stack in
                 (stack', [X86Binop ("->", s, eax)])
@@ -186,6 +194,7 @@ module Show =
       | M i -> Printf.sprintf "-%d(%%ebp)" ((i + 1) * word_size)
       | S i -> Printf.sprintf "-%d(%%ebp)" ((env#allocated_local + i + 1) * word_size)
       | L i -> Printf.sprintf "$%d" i
+      | D s -> Printf.sprintf "$%s" s
                               
     let binop_to_x86 = function
       | "+" -> "addl"
@@ -274,10 +283,18 @@ module Build =
       let (!!) s = Buffer.add_string asm s in
       let (!) s = !!s; !!"\n" in
       let add_asm list = List.iter (fun i -> !(Show.instr env i)) list in
+      (* EXTERN *)
+      (* List.iter (fun f -> !(Printf.sprintf "\t.extern L%s" f)) Stdlib.get_builtins_list; *)
+      (* !!"\n"; *)
+      (* TEXT *)
       !"\t.text";
       !"\t.globl\tmain";
       List.iter (fun s_fdef -> add_asm @@ compile_fdef env s_fdef) s_fdefs;
       add_asm @@ compile_main env s_main;
+      !!"\n";
+      (* DATA *)
+      !"\t.data";
+      List.iteri (fun i (l, s) -> !(Printf.sprintf "%s%d:\n\t.int %d\n\t.ascii \"%s\"" l i (Bytes.length s) s)) env#used_data;
       !!"\n";
       Buffer.contents asm
                       

@@ -191,8 +191,8 @@ module Show =
       | R8 i -> regs8.(i)
       | R i -> regs32.(i)
       | F i -> Printf.sprintf "%d(%%ebp)" ((i + 2) * word_size)              
-      | M i -> Printf.sprintf "-%d(%%ebp)" ((i + 1) * word_size)
-      | S i -> Printf.sprintf "-%d(%%ebp)" ((env#allocated_local + i + 1) * word_size)
+      | M i -> Printf.sprintf "-%d(%%ebp)" ((env#used_regs_num + i + 1) * word_size)
+      | S i -> Printf.sprintf "-%d(%%ebp)" ((env#used_regs_num + env#allocated_local + i + 1) * word_size)
       | L i -> Printf.sprintf "$%d" i
       | D s -> Printf.sprintf "$%s" s
                               
@@ -246,7 +246,7 @@ module Build =
                                                                                                       
     let compile_fdef env (name, args, s_body) =
       env#clear;
-      List.iteri (fun ind arg -> env#set_local arg @@ F ind) @@ List.rev args;
+      List.iteri (fun ind arg -> env#set_local arg @@ F ind) args;
       let code = Compile.stack_program env s_body in
       let push_regs, pop_regs = regs_to_stack env#used_regs in
       List.concat

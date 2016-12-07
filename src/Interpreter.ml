@@ -12,11 +12,13 @@ class env input = object
   method get_f x = try Some (M.find x !funcs) with _ -> None
   method set_f x f = funcs := M.add x f !funcs
 end
-                    
+
+open Language.Expr
+open Language.Stmt
 let run input (fdefs, main) =
   let env = new env input in
   let rec expr =
-    let open Language.Expr in
+    (*let open Language.Expr in*)
     function
     | Const n -> n
     | Var x -> env#get_v x
@@ -28,7 +30,7 @@ let run input (fdefs, main) =
        | None -> env#builtin name vals
   in
   let rec stmt =
-    let open Language.Stmt in
+    (*let open Language.Stmt in*)
     function
     | Skip -> None
     | Assign(x, e) -> env#set_v x @@ expr e; None

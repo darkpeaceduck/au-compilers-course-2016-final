@@ -102,8 +102,9 @@ end
 
 module Compile =
   struct
+    open StackMachine.Instrs
     let stack_program env code =
-      let open StackMachine.Instrs in
+      (*let open StackMachine.Instrs in*)
       let module V = Language.Value in
       let rec compile stack code =
 	match code with

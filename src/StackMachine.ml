@@ -91,7 +91,9 @@ module Compile =
       method new_lbl = n := !n + 1; Printf.sprintf "lbl%d" !n
       method get_fargs name = try Some (M.find name fargs) with _ -> None
     end
-                  
+
+    open Language.Expr
+    open Language.Stmt
     let prog (fdefs, main) =
       let env =
         let fargs = List.fold_left (fun m (name, args, _) -> M.add name args m) M.empty fdefs in
@@ -99,7 +101,7 @@ module Compile =
       in
       let open Instrs in
       let rec expr =
-        let open Language.Expr in
+        (*let open Language.Expr in*)
         function
         | Var x -> [S_LD x]
         | Const n -> [S_PUSH n]
@@ -120,7 +122,7 @@ module Compile =
              | None -> [S_BUILTIN (name, List.length args)]
       in
       let rec stmt =
-        let open Language.Stmt in
+        (*let open Language.Stmt in*)
         function
         | Skip -> []
         | Assign (x, e) -> expr e @ [S_ST x]

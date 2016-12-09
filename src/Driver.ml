@@ -14,7 +14,7 @@ let main = ()
     match Parser.File.parse filename with
     | `Ok prog ->
        (match mode with
-        | `Parse -> () (* | `Parse -> PrettyPrinter.Print.prog prog *)
+        | `Parse -> () (* PrettyPrinter.prog prog *)
         | `Int -> Io.write @@ Interpreter.run (Io.read ()) prog
         | `DebugSM -> () (* | `DebugSM -> PrettyPrinter.Print.instrs @@ instrs () *)
         | `SM -> Io.write @@ StackMachine.Interpreter.run (Io.read ()) @@ StackMachine.Compile.prog prog

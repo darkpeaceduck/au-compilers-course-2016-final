@@ -15,6 +15,9 @@ module Instrs =
       | S_BUILTIN of string * int
       | S_RET
       | S_END
+      | S_ARRAY of bool * int (* false for unboxed, true for boxed *)
+      | S_ELEM (* first array, then int *)
+      | S_STA of string * int
   end
 
 module Interpreter =
@@ -24,7 +27,7 @@ module Interpreter =
       inherit Stdlib.core input
       val cn : Instrs.t array = Array.of_list code (* Instrs.t array of stack machine *)
       val lm : int M.t = labels (* label to line number map *)
-      val sf : V.t M.t list ref = ref [M.empty] (* stack framse list *)
+      val sf : V.t M.t list ref = ref [M.empty] (* stack frames list *)
       val st : V.t list ref = ref [] (* stack *)
       method get_ci ln = cn.(ln)
       method push n = st := n::!st
@@ -35,6 +38,7 @@ module Interpreter =
       method new_frame = sf := M.empty::!sf
       method del_frame = let _::sf' = !sf in sf := sf'
       method goto l = M.find l lm
+      method get_v v = let vm::_ = !sf in M.find v vm
     end
 
     let run input (s_fdefs, s_main) =
@@ -77,6 +81,22 @@ module Interpreter =
                 let rln = env#pop in
                 env#push rv;
                 V.to_int rln
+             | S_ARRAY (_, n) ->
+                let args = List.rev @@ BatList.init n (fun _ -> env#pop) in
+                env#push @@ V.Array (Array.of_list args);
+                ln + 1
+             | S_ELEM ->
+                let ind = env#pop in
+                let arr = env#pop in
+                env#push @@ Array.get (V.to_array arr) (V.to_int ind);
+                ln + 1
+             | S_STA (arr, n) ->
+                let e = env#pop in
+                let inds = List.rev @@ BatList.init (n - 1) (fun _ -> V.to_int @@ env#pop) in
+                let arr = V.to_array @@ env#get_v arr in
+                let use_inds, last = let last::other = List.rev inds in List.rev other, last in
+                Array.set (List.fold_left (fun arr ind -> V.to_array @@ Array.get arr ind) arr use_inds) last e;
+                ln + 1
       in
       run' 0;
       env#get_os
@@ -92,8 +112,8 @@ module Compile =
       method get_fargs name = try Some (M.find name fargs) with _ -> None
     end
 
-    open Language.Expr
-    open Language.Stmt
+    module E = Language.Expr
+    module S = Language.Stmt
     let prog (fdefs, main) =
       let env =
         let fargs = List.fold_left (fun m (name, args, _) -> M.add name args m) M.empty fdefs in
@@ -101,41 +121,43 @@ module Compile =
       in
       let open Instrs in
       let rec expr =
-        (*let open Language.Expr in*)
         function
-        | Var x -> [S_LD x]
-        | Const n -> [S_PUSH n]
-        | Binop (o, l, r) ->
+        | E.Var x -> [S_LD x]
+        | E.Const n -> [S_PUSH n]
+        | E.Binop (o, l, r) ->
            let le, re = expr l, expr r in
            (match o with
             | "&&" | "!!" ->
-               let bsum = List.concat [[S_PUSH V.zero]; le; [S_BINOP "!="]; [S_PUSH V.zero]; re; [S_BINOP "!="]; [S_BINOP "+"]]
-               in
+               let bsum = List.concat [[S_PUSH V.zero]; le; [S_BINOP "!="]; [S_PUSH V.zero]; re; [S_BINOP "!="]; [S_BINOP "+"]] in
                (match o with
                 | "&&" -> List.concat [[S_PUSH (V.Int 2)]; bsum; [S_BINOP "=="]]
                 | _ -> List.concat [[S_PUSH V.zero]; bsum; [S_BINOP "<"]])
             | _ -> List.concat [le; re; [S_BINOP o]])
-        | FCall (name, args) ->
-           (List.concat @@ List.map (fun arg -> expr arg) args) @
-             match env#get_fargs name with
-             | Some fargs -> [S_CALL (name, fargs)]
-             | None -> [S_BUILTIN (name, List.length args)]
+        | E.FCall (name, args) ->
+           ((List.concat @@ List.map (fun arg -> expr arg) args) @
+              match env#get_fargs name with
+              | Some fargs -> [S_CALL (name, fargs)]
+              | None -> [S_BUILTIN (name, List.length args)])
+        | E.UArray arr | E.BArray arr as a ->
+           let bit t = match t with E.UArray _ -> false | _ -> true in
+           (List.concat @@ List.map (fun e -> expr e) arr) @ [S_ARRAY (bit a, List.length arr)]
+        | E.ArrInd (arr, ind) -> List.concat [expr arr; expr ind; [S_ELEM]]
       in
       let rec stmt =
-        (*let open Language.Stmt in*)
         function
-        | Skip -> []
-        | Assign (x, e) -> expr e @ [S_ST x]
-        | Seq (l, r) -> stmt l @ stmt r
-        | While _ | If _ as cyc ->
+        | S.Skip -> []
+        | S.Assign (x, e) -> expr e @ [S_ST x]
+        | S.Seq (l, r) -> stmt l @ stmt r
+        | S.While _ | If _ as cyc ->
            let lbl1, lbl2 = env#new_lbl, env#new_lbl in
            (match cyc with
             | While (e, s) ->
                List.concat [[S_LBL lbl1]; expr e; [S_CJMP ("==0", lbl2)]; stmt s; [S_JMP lbl1]; [S_LBL lbl2]]
             | If (e, s1, s2) ->
                List.concat [expr e; [S_CJMP ("==0", lbl2)]; stmt s1; [S_JMP lbl1]; [S_LBL lbl2]; stmt s2; [S_LBL lbl1]])
-        | FCall (name, args) -> (expr @@ Language.Expr.FCall (name, args)) @ [S_POP]
-        | Return e -> expr e @ [S_RET]
+        | S.FCall (name, args) -> (expr @@ E.FCall (name, args)) @ [S_POP]
+        | S.Return e -> expr e @ [S_RET]
+        | S.ArrAssign (a, inds, e) -> List.concat [List.concat @@ List.map (fun e -> expr e) inds; expr e; [S_STA (a, List.length inds + 1)]]
       in
       let fdef (name, args, body) = name, args, stmt body in
       List.map (fun fd -> fdef fd) fdefs, stmt main @ [S_END]

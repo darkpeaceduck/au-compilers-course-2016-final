@@ -95,16 +95,19 @@ class env = object(self)
     (* CLEAR *)
     method clear = free_regs := saved_regs; used_regs := S.empty; local_vars := M.empty; allocated_local := 0; allocated_stack_max := 0
     (* STRINGS *)
-    val data : (string * string) list ref = ref [] (* used data, only strings so far *)
-    method add_string s = data := ("string", s)::!data; D (Printf.sprintf "string%d" @@ List.length !data - 1)
-    method used_data = List.rev !data
+    val strings : string list ref = ref [] (* used strings *)
+    method add_string s = strings := s::!strings; D (Printf.sprintf "string%d" @@ List.length !strings - 1)
+    method used_strings = List.rev !strings
+    (* ARRAYS *)
+    val arrays : int array list ref = ref [] (* used arrays *)
+    method add_array a = arrays := a::!arrays; D (Printf.sprintf "array%d" @@ List.length !arrays - 1)
+    method used_arrays = List.rev !arrays
 end
 
 module Compile =
   struct
     open StackMachine.Instrs
     let stack_program env code =
-      (*let open StackMachine.Instrs in*)
       let module V = Language.Value in
       let rec compile stack code =
 	match code with
@@ -285,7 +288,7 @@ module Build =
       let (!) s = !!s; !!"\n" in
       let add_asm list = List.iter (fun i -> !(Show.instr env i)) list in
       (* EXTERN *)
-      (* List.iter (fun f -> !(Printf.sprintf "\t.extern L%s" f)) Stdlib.get_builtins_list; *)
+      (* List.iter (fun f -> !(Printf.sprintf "\t.extern L%s" f)) Stdlib.builtins_list; *)
       (* !!"\n"; *)
       (* TEXT *)
       !"\t.text";
@@ -295,7 +298,12 @@ module Build =
       !!"\n";
       (* DATA *)
       !"\t.data";
-      List.iteri (fun i (l, s) -> !(Printf.sprintf "%s%d:\n\t.int %d\n\t.ascii \"%s\"" l i (Bytes.length s) s)) env#used_data;
+      List.iteri (fun i s -> !(Printf.sprintf "string%d:\n\t.int %d\n\t.ascii \"%s\"" i (Bytes.length s) s)) env#used_strings;
+      List.iteri
+        (fun i a ->
+          !(Printf.sprintf "array%d:\n\t.int %d\n\t.int " i (Array.length a));
+          !(String.concat "," @@ List.map (fun n -> Printf.sprintf "%d" n) @@ Array.to_list a))
+        env#used_arrays;
       !!"\n";
       Buffer.contents asm
                       

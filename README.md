@@ -16,6 +16,7 @@ if/while/for/repeat control flows | [x]          | [x]           | [x] |
 funcs                             | [x]          | [x]           | [x] |
 builtins                          | [x]          | [x]           | [x] |
 strings                           | [x]          | [x]           | [x] |
+arrays                            | [x]          | [x]           | [ ] |
 
 ## todo
 

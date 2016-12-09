@@ -38,8 +38,12 @@ module Expr =
         );
         primary:
           v:!(Value.parse) {Const v}
-          | f:IDENT args:(-"(" !(Util.list0 parse) -")")? { match args with | None -> Var f | Some args -> FCall (f, args) }
-          | -"(" parse -")"                                              
+          | s:(f:IDENT args:(-"(" !(Util.list0 parse) -")")? { match args with | None -> Var f | Some args -> FCall (f, args) }
+               | -"(" parse -")"
+               | "[" e:!(Util.list0 parse) "]" {UArray e}
+               | "{" e:!(Util.list0 parse) "}" {BArray e})
+            d:(-"[" !(Util.list0By (ostap ("][")) parse) -"]")?
+            {match d with None -> s | Some d -> List.fold_left (fun r e -> ArrInd(r, e)) s d}
     )
   end
     
@@ -50,7 +54,11 @@ module Stmt =
       parse: s:simple d:(-";" parse?)? {match d with | None | Some None -> s | Some (Some d) -> Seq (s, d)};
       expr: !(Expr.parse);
       simple:
-        x:IDENT s:(":=" e:expr {Assign (x, e)} | "(" args:!(Util.list0 expr) ")" {FCall (x, args)}) {s}
+        x:IDENT s:(
+            indices:(-"[" !(Util.list0By (ostap ("][")) expr) -"]")? ":=" e:expr
+              {match indices with | None -> Assign (x, e) | Some s -> ArrAssign (x, s, e)}
+          | "(" args:!(Util.list0 expr) ")" {FCall(x, args)}
+        ) {s}
         | %"skip" {Skip}
         | %"while" e:expr %"do" s:parse %"od" {While (e, s)}
         | %"if" e:expr %"then" the:parse

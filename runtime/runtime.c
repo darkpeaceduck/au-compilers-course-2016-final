@@ -78,3 +78,35 @@ extern string Lstrsub(string s, int i, int l) {
   strncpy(r->buf, s->buf + i, l);
   return r;
 }
+
+typedef struct {
+  int len;
+  void* buf[];
+} array_t;
+typedef array_t *array;
+
+static array arralloc(int n) {
+  array a = (array) malloc(sizeof(int) + n * sizeof(void*));
+  a->len = n;
+  return a;
+}
+
+extern int Larrlen(array a) {
+  return a->len;
+}
+
+extern array Larrmake(int n, int v) {
+  array a = arralloc(n);
+  for (int i = 0; i < n; i++) {
+    a->buf[i] = (void*)v;
+  }
+  return a;
+}
+
+extern array LArrmake(int n, void* ptr) {
+  array a = arralloc(n);
+  for (int i = 0; i < n; i++) {
+    a->buf[i] = ptr;
+  }
+  return a;
+}

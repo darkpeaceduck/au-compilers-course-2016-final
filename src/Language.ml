@@ -7,6 +7,8 @@ module Value =
                     
     let zero, one = Int 0, Int 1
                                
+    let nil = Array ([||])
+                    
     let to_int = function
       | Int i -> i
       | _ -> failwith "Not an Int!"

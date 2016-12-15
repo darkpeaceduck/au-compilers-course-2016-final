@@ -2,6 +2,10 @@ module V = Language.Value
 
 module Instrs =
   struct
+    type at =
+      | Boxed
+      | Unboxed
+    
     type t =
       | S_PUSH of V.t  
       | S_POP
@@ -15,9 +19,9 @@ module Instrs =
       | S_BUILTIN of string * int
       | S_RET
       | S_END
-      | S_ARRAY of bool * int (* false for unboxed, true for boxed *)
-      | S_ELEM (* first array, then int *)
-      | S_STA of string * int
+      | S_ARRAY of at * int (* false for unboxed, true for boxed + len*)
+      | S_ELEM (* first array, then index *)
+      | S_STA (* first array, then index, then value *)
   end
 
 module Interpreter =
@@ -81,21 +85,21 @@ module Interpreter =
                 let rln = env#pop in
                 env#push rv;
                 V.to_int rln
-             | S_ARRAY (_, n) ->
-                let args = List.rev @@ BatList.init n (fun _ -> env#pop) in
-                env#push @@ V.Array (Array.of_list args);
+             | S_ARRAY (b, n) ->
+                let dv = match b with Unboxed -> V.zero | Boxed -> V.nil in
+                env#push @@ V.Array (Array.make n dv);
                 ln + 1
              | S_ELEM ->
-                let ind = env#pop in
-                let arr = env#pop in
-                env#push @@ Array.get (V.to_array arr) (V.to_int ind);
+                let i = env#pop in
+                let a = env#pop in
+                env#push @@ Array.get (V.to_array a) (V.to_int i);
                 ln + 1
-             | S_STA (arr, n) ->
-                let e = env#pop in
-                let inds = List.rev @@ BatList.init (n - 1) (fun _ -> V.to_int @@ env#pop) in
-                let arr = V.to_array @@ env#get_v arr in
-                let use_inds, last = let last::other = List.rev inds in List.rev other, last in
-                Array.set (List.fold_left (fun arr ind -> V.to_array @@ Array.get arr ind) arr use_inds) last e;
+             | S_STA ->
+                let v = env#pop in
+                let i = env#pop in
+                let a = env#pop in
+                Array.set (V.to_array a) (V.to_int i) v;
+                env#push a;
                 ln + 1
       in
       run' 0;
@@ -139,8 +143,8 @@ module Compile =
               | Some fargs -> [S_CALL (name, fargs)]
               | None -> [S_BUILTIN (name, List.length args)])
         | E.UArray arr | E.BArray arr as a ->
-           let bit t = match t with E.UArray _ -> false | _ -> true in
-           (List.concat @@ List.map (fun e -> expr e) arr) @ [S_ARRAY (bit a, List.length arr)]
+           let bit t = match t with E.UArray _ -> Unboxed | _ -> Boxed in
+           [S_ARRAY (bit a, List.length arr)] @ (List.concat @@ BatList.mapi (fun i v -> List.concat [[S_PUSH (V.Int i)]; expr v; [S_STA]]) arr)
         | E.ArrInd (arr, ind) -> List.concat [expr arr; expr ind; [S_ELEM]]
       in
       let rec stmt =
@@ -157,7 +161,10 @@ module Compile =
                List.concat [expr e; [S_CJMP ("==0", lbl2)]; stmt s1; [S_JMP lbl1]; [S_LBL lbl2]; stmt s2; [S_LBL lbl1]])
         | S.FCall (name, args) -> (expr @@ E.FCall (name, args)) @ [S_POP]
         | S.Return e -> expr e @ [S_RET]
-        | S.ArrAssign (a, inds, e) -> List.concat [List.concat @@ List.map (fun e -> expr e) inds; expr e; [S_STA (a, List.length inds + 1)]]
+        | S.ArrAssign (a, inds, e) ->
+           let inds = List.map (fun i -> expr i) inds in
+           let body, last = let last::rbody = List.rev inds in List.rev rbody, last in
+           List.concat [[S_LD a]; List.concat @@ List.map (fun i -> i @ [S_ELEM]) body; last; expr e; [S_STA; S_POP]]
       in
       let fdef (name, args, body) = name, args, stmt body in
       List.map (fun fd -> fdef fd) fdefs, stmt main @ [S_END]

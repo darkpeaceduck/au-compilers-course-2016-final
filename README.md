@@ -16,7 +16,7 @@ if/while/for/repeat control flows | [x]          | [x]           | [x] |
 funcs                             | [x]          | [x]           | [x] |
 builtins                          | [x]          | [x]           | [x] |
 strings                           | [x]          | [x]           | [x] |
-arrays                            | [x]          | [x]           | [ ] |
+arrays                            | [x]          | [x]           | [x] |
 
 ## todo
 
@@ -64,3 +64,9 @@ arrays                            | [x]          | [x]           | [ ] |
 ### builtins
 
 	n := strlen("abra")
+
+### arrays
+
+	a := {[1, 2], [4, 5]}
+	b := {"asd", "asd"}
+	c := [1, 2, 3, 4, 5]

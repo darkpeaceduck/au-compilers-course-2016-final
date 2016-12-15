@@ -6,6 +6,7 @@ type opnd =
   | S of int (* stack, 0.. *)
   | L of int (* const, int *)
   | D of string (* data, 0.. *)
+  | AR (* array cell using eax and ecx *)
            
 let regs32 = [|"%eax"; "%ecx"; "%edx"; "%ebx"; "%esp"; "%ebp"; "%esi"; "%edi"|]
 let eax, ecx, edx, ebx, esp, ebp, esi, edi = R 0, R 1, R 2, R 3, R 4, R 5, R 6, R 7
@@ -98,12 +99,9 @@ class env = object(self)
     val strings : string list ref = ref [] (* used strings *)
     method add_string s = strings := s::!strings; D (Printf.sprintf "string%d" @@ List.length !strings - 1)
     method used_strings = List.rev !strings
-    (* ARRAYS *)
-    val arrays : int array list ref = ref [] (* used arrays *)
-    method add_array a = arrays := a::!arrays; D (Printf.sprintf "array%d" @@ List.length !arrays - 1)
-    method used_arrays = List.rev !arrays
 end
 
+(* //TODO положить stack внутрь env *)
 module Compile =
   struct
     open StackMachine.Instrs
@@ -116,6 +114,7 @@ module Compile =
 	   let (stack', x86code) =
              let mov_w_reg ?(r=eax) f t =
                match f, t with
+               | _, _ when f=t -> []
                | R _, _ | _, R _ -> [X86Binop ("->", f, t)]
                | _ -> [X86Binop ("->", f, r); X86Binop ("->", r, t)]
              in
@@ -183,6 +182,20 @@ module Compile =
              | S_RET ->
                 let s, stack' = env#pop stack in
                 (stack', [X86Binop ("->", s, eax)])
+             | S_ARRAY (b, n) ->
+                let name = match b with Unboxed -> "arrmake" | _ -> "Arrmake" in
+                let s = env#allocate stack in
+                (env#push stack s, [X86Push (L 0); X86Push (L n); X86Call ("L"^name); X86Free 2; X86Binop ("->", eax, s)])
+             | S_ELEM ->
+                let i, stack' = env#pop stack in
+                let a, stack' = env#pop stack' in
+                let v = env#allocate stack' in
+                (env#push stack' v, List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx AR v])
+             | S_STA ->
+                let v, stack' = env#pop stack in
+                let i, stack' = env#pop stack' in
+                let a, stack' = env#pop stack' in
+                (env#push stack' a, List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx v AR])
            in
 	   x86code @ (compile stack' code')
       in
@@ -199,6 +212,7 @@ module Show =
       | S i -> Printf.sprintf "-%d(%%ebp)" ((env#used_regs_num + env#allocated_local + i + 1) * word_size)
       | L i -> Printf.sprintf "$%d" i
       | D s -> Printf.sprintf "$%s" s
+      | AR -> Printf.sprintf "%d(%%eax,%%ecx,%d)" word_size word_size
                               
     let binop_to_x86 = function
       | "+" -> "addl"
@@ -207,6 +221,7 @@ module Show =
       | "=" -> "cmpl"
       | "->" -> "movl"
       | "@" -> "xorl"
+      | "<->" -> "xchg"
                  
     let set_to_x86 = function
       | "<=" -> "le"
@@ -299,11 +314,6 @@ module Build =
       (* DATA *)
       !"\t.data";
       List.iteri (fun i s -> !(Printf.sprintf "string%d:\n\t.int %d\n\t.ascii \"%s\"" i (Bytes.length s) s)) env#used_strings;
-      List.iteri
-        (fun i a ->
-          !(Printf.sprintf "array%d:\n\t.int %d\n\t.int " i (Array.length a));
-          !(String.concat "," @@ List.map (fun n -> Printf.sprintf "%d" n) @@ Array.to_list a))
-        env#used_arrays;
       !!"\n";
       Buffer.contents asm
                       

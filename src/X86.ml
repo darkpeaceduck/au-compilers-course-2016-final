@@ -70,85 +70,90 @@ class env = object(self)
        allocated_local := !allocated_local + 1;
        M (!allocated_local - 1)
   (* STACK *)
+  val stack : opnd list ref = ref [] (* stack *)
   val allocated_stack_max : int ref = ref 0 (* max stack size *)
   method private allocated_stack_max = !allocated_stack_max
   method private update_stack_max n = allocated_stack_max := max !allocated_stack_max n
-  method allocate stack =
+  method allocate =
     match self#get_free_reg_option with
     | Some r -> r
     | None ->
-       match stack with
+       match !stack with
        | [] | (R _)::_ -> S 0
        | (S n)::_ -> S (n + 1)
-  method push stack opnd =
+  method push opnd =
     (match opnd with
      | R _ as r -> free_regs := S.remove r !free_regs; used_regs := S.add r !used_regs
      | S n -> self#update_stack_max (n + 1));
-    opnd::stack
-    method pop stack =
-      let s::stack' = stack in
-      (match s with
-       | R _ as r -> free_regs := S.add r !free_regs;
-       | _ -> ());
-      s, stack'
-    (* TOTAL *)
-    method allocated_total = self#allocated_local + self#allocated_stack_max
-    (* CLEAR *)
-    method clear = free_regs := saved_regs; used_regs := S.empty; local_vars := M.empty; allocated_local := 0; allocated_stack_max := 0
-    (* STRINGS *)
-    val strings : string list ref = ref [] (* used strings *)
-    method add_string s = strings := s::!strings; D (Printf.sprintf "string%d" @@ List.length !strings - 1)
-    method used_strings = List.rev !strings
+    stack := opnd::!stack
+  method pop =
+    let s::stack' = !stack in
+    (match s with
+     | R _ as r -> free_regs := S.add r !free_regs;
+     | _ -> ());
+    stack := stack';
+    s
+  (* TOTAL *)
+  method allocated_total = self#allocated_local + self#allocated_stack_max
+  (* CLEAR *)
+  method clear = free_regs := saved_regs; used_regs := S.empty; local_vars := M.empty; allocated_local := 0; allocated_stack_max := 0; stack := []
+  (* STRINGS *)
+  val strings : string list ref = ref [] (* used strings *)
+  method add_string s = strings := s::!strings; D (Printf.sprintf "string%d" @@ List.length !strings - 1)
+  method used_strings = List.rev !strings
 end
 
-(* //TODO положить stack внутрь env *)
 module Compile =
   struct
     open StackMachine.Instrs
+    module V = Language.Value
     let stack_program env code =
-      let module V = Language.Value in
-      let rec compile stack code =
-	match code with
+      (* moving from opnd to opnd with register if needed *)
+      let mov_w_reg ?(r=eax) f t =
+        match f, t with
+        | _, _ when f=t -> []
+        | R _, _ | _, R _ -> [X86Binop ("->", f, t)]
+        | _ -> [X86Binop ("->", f, r); X86Binop ("->", r, t)]
+      in
+      (* prologue and epilogue for funcs *)
+      let precall n =
+        let rec precall' = function
+          | 0 ->
+             let x = env#allocate in
+             env#push x;
+             [], [X86Binop ("->", eax, x)]
+          | n ->
+             let x = env#pop in
+             let pre, post = precall' (n - 1) in
+             (X86Push x)::pre, post
+        in
+        let pre, post = precall' n in
+        pre, (X86Free n)::post
+      in
+      let rec compile = function
 	| [] | (S_END)::_ -> []
 	| i::code' ->
-	   let (stack', x86code) =
-             let mov_w_reg ?(r=eax) f t =
-               match f, t with
-               | _, _ when f=t -> []
-               | R _, _ | _, R _ -> [X86Binop ("->", f, t)]
-               | _ -> [X86Binop ("->", f, r); X86Binop ("->", r, t)]
-             in
-             let rec precall num stack =
-               match num with
-               | 0 ->
-                  let s = env#allocate stack in
-                  (env#push stack s, [], [X86Binop ("->", eax, s)])
-               | n ->
-                  let s, stack' = env#pop stack in
-                  let stack', pre, post = precall (num - 1) stack' in
-                  (stack', (X86Push s)::pre, post)
-             in
+	   let x86code =
              match i with
              | S_PUSH n ->
-                let s = env#allocate stack in
-                (env#push stack s,
-                 match n with
-                 | V.Int i -> [X86Binop ("->", L i, s)]
-                 | V.String st -> [X86Binop ("->", env#add_string st, s)])
-             | S_POP ->
-                let _, stack' = env#pop stack in
-                (stack', [])
+                let p = env#allocate in
+                env#push p;
+                (match n with
+                 | V.Int i -> [X86Binop ("->", L i, p)]
+                 | V.String s -> [X86Binop ("->", env#add_string s, p)])
+             | S_POP -> env#pop; []
              | S_LD x ->
                 let m = env#get_local x in
-                let s = env#allocate stack in
-                (env#push stack s, mov_w_reg m s)
+                let s = env#allocate in
+                env#push s;
+                mov_w_reg m s
              | S_ST x ->
-                let s, stack' = env#pop stack in
+                let s = env#pop in
                 let m = env#create_local x in
-                (stack', if s = m then [] else mov_w_reg s m)
+                if s = m then [] else mov_w_reg s m
              | S_BINOP o ->
-                let l, stack'' = env#pop stack in
-                let r, stack' = env#pop stack'' in
+                let l = env#pop in
+                let r = env#pop in
                 let cmds =
                   match o with
                   | "+" | "-" | "*" ->
@@ -167,39 +172,43 @@ module Compile =
                      in
                      pre @ [X86Binop ("@", eax, eax); X86Binop ("=", l', r'); X86Set (o, al); X86Binop ("->", eax, r)] @ post
                 in
-                (env#push stack' r, cmds)
-             | S_LBL l -> (stack, [X86Lbl l])
-             | S_JMP l -> (stack, [X86Jmp l])
+                env#push r;
+                cmds
+             | S_LBL l -> [X86Lbl l]
+             | S_JMP l -> [X86Jmp l]
              | S_CJMP (c, l) ->
-                let s, stack' = env#pop stack in
-                (stack', [X86Binop ("->", s, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)])
+                let s = env#pop in
+                [X86Binop ("->", s, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)]
              | S_CALL (name, args) -> 
-                let stack', pre, post = precall (List.length args) stack in
-                (stack', List.concat [pre; [X86Call name; X86Free (List.length pre)]; post])
+                let pre, post = precall (List.length args) in
+                List.concat [pre; [X86Call name]; post]
              | S_BUILTIN (name, argsn) ->
-                let stack', pre, post = precall argsn stack in
-                (stack', List.concat [pre; [X86Call ("L"^name); X86Free (List.length pre)]; post])
+                let pre, post = precall argsn in
+                List.concat [pre; [X86Call ("L"^name)]; post]
              | S_RET ->
-                let s, stack' = env#pop stack in
-                (stack', [X86Binop ("->", s, eax)])
+                let s = env#pop in
+                [X86Binop ("->", s, eax)]
              | S_ARRAY (b, n) ->
                 let name = match b with Unboxed -> "arrmake" | _ -> "Arrmake" in
-                let s = env#allocate stack in
-                (env#push stack s, [X86Push (L 0); X86Push (L n); X86Call ("L"^name); X86Free 2; X86Binop ("->", eax, s)])
+                let s = env#allocate in
+                env#push s;
+                [X86Push (L 0); X86Push (L n); X86Call ("L"^name); X86Free 2; X86Binop ("->", eax, s)]
              | S_ELEM ->
-                let i, stack' = env#pop stack in
-                let a, stack' = env#pop stack' in
-                let v = env#allocate stack' in
-                (env#push stack' v, List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx AR v])
+                let i = env#pop in
+                let a = env#pop in
+                let v = env#allocate in
+                env#push v;
+                List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx AR v]
              | S_STA ->
-                let v, stack' = env#pop stack in
-                let i, stack' = env#pop stack' in
-                let a, stack' = env#pop stack' in
-                (env#push stack' a, List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx v AR])
+                let v = env#pop in
+                let i = env#pop in
+                let a = env#pop in
+                env#push a;
+                List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx v AR]
            in
-	   x86code @ (compile stack' code')
+	   x86code @ (compile code')
       in
-      compile [] code
+      compile code
   end
 
 module Show =

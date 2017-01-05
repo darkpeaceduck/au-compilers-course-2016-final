@@ -27,6 +27,7 @@ static string stralloc(int n) {
   return s;
 }
 
+
 extern string Lstrmake(int n, int c) {
   string s = stralloc(n);
   for (int i = 0; i < n; i++) {

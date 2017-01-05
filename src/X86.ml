@@ -335,6 +335,6 @@ module Build =
         with Not_found -> failwith "Please, provide a path to runtime src in RUNTIME_SRC env"
       in
       let gcc_flags = "-g -Ofast" in
-      let runtime_o = Filename.concat runtime_src "runtime.o" in
-      ignore @@ Sys.command (Printf.sprintf "gcc %s -m32 -o %s %s %s.s" gcc_flags name runtime_o name)
+      let runtime_lib = "runtime" in
+      ignore @@ Sys.command (Printf.sprintf "g++ -L %s %s -m32 -o %s %s.s -l%s" runtime_src gcc_flags name name runtime_lib)
   end

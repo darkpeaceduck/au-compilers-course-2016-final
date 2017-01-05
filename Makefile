@@ -30,4 +30,5 @@ success:
 	@echo "=====   SUCCESS   ====="
 
 clean:
-	rm -rf _build *.log *.native *.byte Makefile~ runtime/runtime.o
+	@cd runtime && make clean && cd ..
+	rm -rf _build *.log *.native *.byte Makefile~

@@ -33,13 +33,15 @@ public:
 
 static map<void *, RegisterItem> registry;
 
+extern void * gc_malloc(size_t size) {
+	void * ptr = malloc(size);
+	registry[ptr] = RegisterItem();
+	return ptr;
+}
+
 extern "C" {
-void Tgc_inc_ref(void * ptr) {
-	if (registry.count(ptr)) {
-		registry[ptr].inc_ref();
-	} else {
-		registry[ptr] = RegisterItem(ptr);
-	}
+extern void Tgc_inc_ref(void * ptr) {
+	registry[ptr].inc_ref();
 }
 
 extern void Tgc_ref(void * a, void * b) {

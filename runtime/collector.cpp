@@ -21,6 +21,8 @@ public:
   void inc_ref() {
 	/* anonymous fun res case */
 	if (this->refs == 0) {
+		if (free_q.count(this->protect))
+			free_q.erase(this->protect);
 		for (auto item : this->sub_objects)
 			item->inc_ref();
 	}

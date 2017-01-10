@@ -54,19 +54,19 @@ public:
     return this->refs;
   }
   void print_info() {
-    printf("%d %d \n", refs, (int) protect);
+    printf("%d %p \n", refs, protect);
     for(auto item : this->sub_objects) {
       item->print_info();
     }
   }
 };
 
-static map<void*, RegisterItem> registry;
+static map<void*, RegisterItem *> registry;
 
 extern void* gc_malloc(size_t size) {
   void* ptr = malloc(size);
   printf("* malloc %p *\n", ptr);
-  registry[ptr] = RegisterItem(ptr);
+  registry[ptr] = new RegisterItem(ptr);
   return ptr;
 }
 
@@ -84,7 +84,7 @@ extern "C" {
    * 
    */
   extern void Lgc_info(void* p) {
-    registry[p].print_info();
+    registry[p]->print_info();
   }
   
   /**
@@ -95,7 +95,7 @@ extern "C" {
     // printf("* JUST %d %d * \n", t, (int) ptr);
     if (is_valid(t, p)) {
       // printf("* INC %d %d %d * \n", t, (int) ptr, registry[ptr].refs_cnt());
-      registry[p].inc_ref();
+      registry[p]->inc_ref();
     }
   }
 
@@ -108,11 +108,13 @@ extern "C" {
   extern void Tgc_ref(void* a, int vt, void* v, int nt, void* n) {
     Tgc_dec_ref(vt, v);
     if (registry.count(v))
-    	registry[a].remove_depency(&registry[v]);
+    	registry[a]->remove_depency(registry[v]);
     Tgc_inc_ref(nt, n);
     if (is_valid(nt, n)) {
-      registry[a].depency(&registry[n]);
+      registry[a]->depency(registry[n]);
     }
+    printf("Ref\n");
+    registry[a]->print_info();
   }
 
   /**
@@ -121,7 +123,7 @@ extern "C" {
   extern void Tgc_dec_ref(int t, void* p) {
     if (is_valid(t, p)) {
 //       printf("* DEC %d %d %d * \n", t, (int) ptr, registry[ptr].refs_cnt());
-      registry[p].dec_ref();
+      registry[p]->dec_ref();
     }
   }
 
@@ -142,6 +144,9 @@ extern "C" {
        printf("* DEL %p *\n", ptr);
       // if (t == 0 || (int) ptr != (int) dp) {
       free(ptr);
+      auto it = registry.find(ptr);
+      delete it->second;
+      registry.erase(it);
       // }
     }
     Tgc_clear_q();

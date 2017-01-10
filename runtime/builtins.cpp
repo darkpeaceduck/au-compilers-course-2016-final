@@ -183,6 +183,7 @@ extern marray Larrmake(int n, int v) {
 
 extern marray LArrmake(int n, void* ptr) {
   marray a = arralloc(n);
+  Tgc_inc_ref(1, (void*)a);
   mem_type[(void*)a] = 3;
   for (int i = 0; i < n; i++) {
     a->buf[i] = ptr;
@@ -191,6 +192,7 @@ extern marray LArrmake(int n, void* ptr) {
 
   builtin_mark(ptr);
   Tgc_collect();
+  Tgc_dec_ref(1, (void*)a);
 
   MARK_PTR;
   return a;

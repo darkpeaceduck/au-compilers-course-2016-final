@@ -14,6 +14,7 @@ TESTS=$(MTESTS) $(STESTS) # all
 TESTSI=$(addsuffix .i, $(TESTS))
 TESTSS=$(addsuffix .s, $(TESTS))
 TESTSO=$(addsuffix .o, $(TESTS))
+VALGRIND_ARGS=valgrind --leak-check=full --show-leak-kinds=all --show-reachable=no --error-exitcode=1
 
 DIFLAGS=
 
@@ -65,7 +66,7 @@ $(TESTSS): %.s: %.expr
 $(TESTSO): export RUNTIME_SRC=../runtime/
 $(TESTSO): %.o: %.expr
 	$(eval FILE:=$(basename $@))
-	../rc.$(CMP) -o $< && cat $(FILE).input | ./$(FILE) > $(FILE).log && diff $(DIFLAGS) $(FILE).log orig/$(FILE).log
+	../rc.$(CMP) -o $< && cat $(FILE).input | $(VALGRIND_ARGS)  ./$(FILE) > $(FILE).log && diff $(DIFLAGS) $(FILE).log orig/$(FILE).log
 
 clean: _clean
 c: _clean

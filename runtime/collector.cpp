@@ -14,7 +14,7 @@ static set<void*> free_q;
 class RegisterItem{
   int refs;
   void* protect;
-  vector<RegisterItem*> sub_objects;
+  set<RegisterItem*> sub_objects;
 public:
   RegisterItem() {}
   RegisterItem(void * ptr) : protect(ptr), refs(0), sub_objects() {}
@@ -38,7 +38,12 @@ public:
     }
   }
   void depency(RegisterItem *obj) {
-    sub_objects.push_back(obj);
+    sub_objects.insert(obj);
+  }
+  void remove_depency(RegisterItem * ptr) {
+	  if (sub_objects.count(ptr)) {
+		  sub_objects.erase(ptr);
+	  }
   }
   int refs_cnt() {
     return this->refs;
@@ -97,6 +102,7 @@ extern "C" {
    */
   extern void Tgc_ref(void* a, int vt, void* v, int nt, void* n) {
     Tgc_dec_ref(vt, v);
+    registry[a].remove_depency(&registry[v]);
     Tgc_inc_ref(nt, n);
     if (is_valid(nt, n)) {
       registry[a].depency(&registry[n]);

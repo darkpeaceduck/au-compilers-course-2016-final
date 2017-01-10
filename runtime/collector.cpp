@@ -1,5 +1,6 @@
 #include <map>
 #include <memory>
+#include <set>
 #include <vector>
 #include <stdint.h>
 #include <malloc.h>
@@ -8,7 +9,7 @@
 #include <string.h>
 using namespace std;
 
-static vector<void*> free_q;
+static set<void*> free_q;
 
 class RegisterItem{
   int refs;
@@ -31,7 +32,7 @@ public:
       for(auto item : this->sub_objects) {
 	item->dec_ref();
       }
-      free_q.push_back(this->protect);
+      free_q.insert(this->protect);
     }
   }
   void depency(RegisterItem *obj) {
@@ -52,6 +53,7 @@ static map<void*, RegisterItem> registry;
 
 extern void* gc_malloc(size_t size) {
   void* ptr = malloc(size);
+  printf("* malloc %p *\n", ptr);
   registry[ptr] = RegisterItem(ptr);
   return ptr;
 }
@@ -123,7 +125,7 @@ extern "C" {
     //printf("%d\n", free_q.size());
     for(auto iter : free_q) {
       void * ptr = iter;
-      // printf("* DEL %d *\n", (int) ptr);
+       printf("* DEL %p *\n", ptr);
       // if (t == 0 || (int) ptr != (int) dp) {
       free(ptr);
       // }

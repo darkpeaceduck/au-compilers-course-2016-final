@@ -12,7 +12,7 @@ static vector<void*> free_q;
 
 class RegisterItem{
   int refs;
-  void * protect;
+  void* protect;
   vector<RegisterItem*> sub_objects;
 public:
   RegisterItem() {}
@@ -35,60 +35,95 @@ public:
   int refs_cnt() {
     return this->refs;
   }
+  void print_info() {
+    printf("%d %d \n", refs, (int) protect);
+    for(auto item : this->sub_objects) {
+      item->print_info();
+    }
+  }
 };
 
-static map<void *, RegisterItem> registry;
+static map<void*, RegisterItem> registry;
 
-extern void * gc_malloc(size_t size) {
-  void * ptr = malloc(size);
+extern void* gc_malloc(size_t size) {
+  void* ptr = malloc(size);
   registry[ptr] = RegisterItem(ptr);
   return ptr;
 }
 
+static int is_valid(int t, void* p) {
+  if (t != 0 && registry.find(p) != registry.end()) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
 extern "C" {
+
+  /**
+   * 
+   */
+  extern void Lgc_info(void* p) {
+    registry[p].print_info();
+  }
   
   /**
    * assign
-   * t = 0 for primitive, 1 otherwise
+   * t = 0 for primitive, 1 otherwise (means array or string)
    */
-  extern void Tgc_inc_ref(int t, void * ptr) {
+  extern void Tgc_inc_ref(int t, void* p) {
     // printf("* JUST %d %d * \n", t, (int) ptr);
-    if (t != 0 && registry.find(ptr) != registry.end()) {
+    if (is_valid(t, p)) {
       // printf("* INC %d %d %d * \n", t, (int) ptr, registry[ptr].refs_cnt());
-      registry[ptr].inc_ref();
+      registry[p].inc_ref();
     }
   }
 
+  extern void Tgc_dec_ref(int t, void* p);
+
   /**
    * arr assign
+   * a for array, v for prev value, n for new value
    */
-  extern void Tgc_ref(int at, void * a, int bt, void * b) {
-    Tgc_inc_ref(bt, b);
-    if (bt != 0 && registry.find(b) != registry.end()) {
-      registry[a].depency(&registry[b]);
+  extern void Tgc_ref(void* a, int vt, void* v, int nt, void* n) {
+    Tgc_dec_ref(vt, v);
+    Tgc_inc_ref(nt, n);
+    if (is_valid(nt, n)) {
+      registry[a].depency(&registry[n]);
     }
   }
 
   /**
    * before Tgc_collect
    */
-  extern void Tgc_dec_ref(int t, void * ptr) {
-    if (t != 0 && registry.find(ptr) != registry.end()) {
+  extern void Tgc_dec_ref(int t, void* p) {
+    if (is_valid(t, p)) {
       // printf("* DEC %d %d %d * \n", t, (int) ptr, registry[ptr].refs_cnt());
-      registry[ptr].dec_ref();
+      registry[p].dec_ref();
     }
+  }
+
+  /**
+   * ...
+   */
+  extern void Tgc_clear_q() {
+    free_q.clear();
   }
 
   /**
    * before ret
    */
   extern void Tgc_collect() {
+    //printf("%d\n", free_q.size());
     for(auto iter : free_q) {
       void * ptr = iter;
       // printf("* DEL %d *\n", (int) ptr);
+      // if (t == 0 || (int) ptr != (int) dp) {
       free(ptr);
+      // }
     }
-    free_q.clear();
+    Tgc_clear_q();
   }
 
 }

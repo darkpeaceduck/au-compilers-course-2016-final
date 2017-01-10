@@ -123,12 +123,16 @@ class env = object(self)
     | M n -> M (n - 1), M n
     | F n -> F (n + 1), F n
   method create_local_t x =
-    (match self#get_local_option x with
-     | Some y -> ()
-     | None ->
-        self#set_local_t x @@ M (!allocated_local + 1);
-        allocated_local := !allocated_local + 2);
-    self#get_local_t x
+    let is_new =
+      match self#get_local_option x with
+      | Some y -> false
+      | None ->
+         self#set_local_t x @@ M (!allocated_local + 1);
+         allocated_local := !allocated_local + 2;
+         true
+    in
+    let t, v = self#get_local_t x in
+    is_new, t, v
   (* TOTAL *)
   method allocated_total = self#allocated_local + self#allocated_stack_max
   (* CLEAR *)
@@ -138,6 +142,20 @@ class env = object(self)
   method add_string s = strings := s::!strings; D (Printf.sprintf "string%d" @@ List.length !strings - 1)
   method used_strings = List.rev !strings
 end
+
+module GC =
+  struct
+    let inc_ref t p = [X86Push p; X86Push t; X86Call "Tgc_inc_ref"; X86Free 2]
+    let dec_ref t p = [X86Push p; X86Push t; X86Call "Tgc_dec_ref"; X86Free 2]
+    let arr_ref a vt v nt n = [X86Push n; X86Push nt; X86Push v; X86Push vt; X86Push a; X86Call "Tgc_ref"; X86Free 5]
+    let collect = [X86Call "Tgc_collect"]
+    let dec_ref_args env =
+      M.fold
+        (fun arg _ l -> let t, v = env#get_local_t arg in (dec_ref t v) @ l)
+        env#locals
+        []
+    let clear_q = [X86Call "Tgc_clear_q"]
+  end
 
 module Compile =
   struct
@@ -197,7 +215,7 @@ module Compile =
         pre, (X86Free n)::post
       in
       let rec compile = function
-	| [] | (S_END)::_ -> []
+	| [] -> []
 	| i::code' ->
 	   let x86code =
              match i with
@@ -215,9 +233,9 @@ module Compile =
                 mov_w_reg t at @ mov_w_reg v av
              | S_ST x ->
                 let t, v = env#pop_t in
-                let lt, lv = env#create_local_t x in
-                List.concat [mov_w_reg t lt; mov_w_reg v lv;
-                             [X86Push v; X86Push t; X86Call "Tgc_inc_ref"; X86Free 2]]
+                let is_new, lt, lv = env#create_local_t x in
+                let dec_prev = if not is_new then GC.dec_ref lt lv else [] in
+                List.concat [dec_prev; mov_w_reg t lt; mov_w_reg v lv; GC.inc_ref t v]
              | S_BINOP o ->
                 let t, l = env#pop_t in
                 let t, r = env#pop_t in
@@ -252,17 +270,10 @@ module Compile =
              | S_BUILTIN (name, argsn) ->
                 let pre, post = precall_t_b argsn in
                 List.concat [pre; [X86Call ("L"^name)]; post]
+             | S_END -> (GC.dec_ref_args env) @ GC.collect
              | S_RET ->
-                let dec_ref_args =
-                  M.fold
-                    (fun arg _ l ->
-                      let t, v = env#get_local_t arg in
-                      [X86Push v; X86Push t; X86Call "Tgc_dec_ref"; X86Free 2] @ l)
-                    env#locals
-                    []
-                in
                 let t, v = env#pop_t in
-                dec_ref_args @ [X86Call "Tgc_collect"] @ [X86Binop ("->", t, ecx); X86Binop ("->", v, eax)]
+                (GC.inc_ref t v) @ (GC.dec_ref_args env) @ (GC.collect) @ (GC.dec_ref t v) @ (GC.clear_q) @ [X86Binop ("->", t, ecx); X86Binop ("->", v, eax)]
              | S_ARRAY (b, n) ->
                 let name = match b with Unboxed -> "arrmake" | _ -> "Arrmake" in
                 let t, v = env#allocate_t in
@@ -280,7 +291,10 @@ module Compile =
                 let at, a = env#pop_t in
                 env#push_t at a;
                 List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx v AR;
-                             [X86Push v; X86Push vt; X86Push a; X86Push at; X86Call "Tgc_ref"; X86Free 4]]
+                             [X86Push v; X86Push vt;
+                              X86Push i; X86Push a; X86Call ("Larrget"); X86Free 2; X86Push eax; X86Push ecx;
+                              X86Push a;
+                              X86Call "Tgc_ref"; X86Free 5]]
            in
 	   x86code @ (compile code')
       in
@@ -350,18 +364,8 @@ module Build =
     let make_inc_ref_args env args =
       List.concat @@
         BatList.mapi
-          (fun ind arg ->
-            let t, v = env#get_local_t arg in
-            [X86Push v; X86Push t; X86Call "Tgc_inc_ref"; X86Free 2])
+          (fun ind arg -> let t, v = env#get_local_t arg in GC.inc_ref t v)
           args
-
-    (*let make_dec_ref_args env =
-      M.fold
-        (fun arg _ l ->
-          let t, v = env#get_local_t arg in
-          [X86Push v; X86Push t; X86Call "Tgc_dec_ref"; X86Free 2] @ l)
-        env#locals
-        []*)
          
     let regs_to_stack regs = List.map (fun x -> X86Push x) regs, List.map (fun x -> X86Pop x) @@ List.rev regs
 

@@ -20,7 +20,6 @@ public:
   RegisterItem(void * ptr) : protect(ptr), refs(0), sub_objects() {}
   void inc_ref() {
 	/* anonymous fun res case */
-	  printf("nc Ref start of %p\n", protect);
 	if (this->refs == 0) {
 		if (free_q.count(this->protect))
 			free_q.erase(this->protect);
@@ -28,10 +27,8 @@ public:
 			item->inc_ref();
 	}
     this->refs++;
-    printf("nc Ref end of %p is %d\n", protect, refs);
   }
   void dec_ref() {
-	  printf("dec Ref start of %p\n", protect);
     this->refs--;
     if (this->refs == 0) {
       for(auto item : this->sub_objects) {
@@ -39,17 +36,11 @@ public:
       }
       free_q.insert(this->protect);
     }
-    printf("dec Ref end %p is %d\n", protect, refs);
   }
   void depency(RegisterItem *obj) {
-	  printf("depency %p %p\n", protect, obj->protect);
     sub_objects.insert(obj);
-    for(auto item : this->sub_objects) {
-    	printf("sub_obj %p\n", item->protect);
-    }
   }
   void remove_depency(RegisterItem * ptr) {
-	  printf("removed depency %p %p\n", protect, ptr->protect);
 	  auto itr = sub_objects.find(ptr);
 	  if(itr != sub_objects.end()){
 		  sub_objects.erase(itr);
@@ -59,7 +50,6 @@ public:
     return this->refs;
   }
   void print_info() {
-    printf("%d %p \n", refs, protect);
     for(auto item : this->sub_objects) {
       item->print_info();
     }
@@ -70,7 +60,6 @@ static map<void*, RegisterItem *> registry;
 
 extern void* gc_malloc(size_t size) {
   void* ptr = malloc(size);
-  printf("* malloc %p *\n", ptr);
   registry[ptr] = new RegisterItem(ptr);
   return ptr;
 }
@@ -97,9 +86,7 @@ extern "C" {
    * t = 0 for primitive, 1 otherwise (means array or string)
    */
   extern void Tgc_inc_ref(int t, void* p) {
-    // printf("* JUST %d %d * \n", t, (int) ptr);
     if (is_valid(t, p)) {
-      // printf("* INC %d %d %d * \n", t, (int) ptr, registry[ptr].refs_cnt());
       registry[p]->inc_ref();
     }
   }
@@ -119,7 +106,6 @@ extern "C" {
     if (is_valid(nt, n)) {
       registry[a]->depency(registry[n]);
     }
-    printf("Ref %p %p %p\n", a, v, n);
     registry[a]->print_info();
   }
 
@@ -128,7 +114,6 @@ extern "C" {
    */
   extern void Tgc_dec_ref(int t, void* p) {
     if (is_valid(t, p)) {
-//       printf("* DEC %d %d %d * \n", t, (int) ptr, registry[ptr].refs_cnt());
       registry[p]->dec_ref();
     }
   }
@@ -144,10 +129,8 @@ extern "C" {
    * before ret
    */
   extern void Tgc_collect() {
-    // printf("%d\n", free_q.size());
     for(auto iter : free_q) {
       void * ptr = iter;
-       printf("* DEL %p *\n", ptr);
       // if (t == 0 || (int) ptr != (int) dp) {
       free(ptr);
       auto it = registry.find(ptr);

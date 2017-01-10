@@ -199,10 +199,6 @@ extern marray LArrmake(int n, void* ptr) {
 }
 
 extern void* Larrget(marray a, int n) {
-	printf("arrgetn %p %d\n", a, n);
-	for(int i = 0; i < a->len; i++)
-		printf("%p ", a->buf[i]);
-	printf("\n");
   void * ret = a->buf[n];
   int memt = mem_type[a];
   Tgc_inc_ref(memt, (void*)ret);

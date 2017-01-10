@@ -1,7 +1,11 @@
 THIS_FILE=$(lastword $(MAKEFILE_LIST))
 
 MTESTS=$(sort $(basename $(wildcard mtest*.expr)))
+#MTESTS=mtest004
+#MTESTS=
 STESTS=$(sort $(basename $(wildcard test*.expr)))
+#STESTS=test027
+#STESTS=
 TESTS=$(MTESTS) $(STESTS) # all
 #TESTS=$(MTESTS) $(sort $(filter-out test030, $(filter-out test029, $(STESTS)))) # strings builtins
 #TESTS=$(sort $(filter-out test011, $(basename $(wildcard test*.expr)))) # cycles

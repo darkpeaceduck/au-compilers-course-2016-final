@@ -1,8 +1,8 @@
 all:builtins.o collector.o
 	ar rc libruntime.a builtins.o collector.o 
-	
+
 builtins.o:
-	gcc -m32 -c builtins.c
+	g++ --std=c++11 -m32 -c builtins.cpp
 
 collector.o:
 	g++ --std=c++11 -m32 -c collector.cpp

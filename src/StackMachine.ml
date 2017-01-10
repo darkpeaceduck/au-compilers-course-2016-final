@@ -7,21 +7,21 @@ module Instrs =
       | Unboxed
     
     type t =
-      | S_PUSH of V.t  
-      | S_POP
-      | S_LD of string (* put arg value on top of the stack, i.e. load *)
-      | S_ST of string (* take value from top of the stack to the var, i.e. store *)
-      | S_BINOP of string
+      | S_PUSH of V.t (* STACK *)
+      | S_POP (* STACK *)
+      | S_LD of string (* put arg value on top of the stack, i.e. load *) (* STACK *)
+      | S_ST of string (* take value from top of the stack to the var, i.e. store *) (* STACK *)
+      | S_BINOP of string (* STACK *)
       | S_LBL of string
       | S_JMP of string
       | S_CJMP of string * string
       | S_CALL of string * string list 
-      | S_BUILTIN of string * int
-      | S_RET
+      | S_BUILTIN of string * int (* STACK *)
+      | S_RET (* STACK *)
       | S_END
-      | S_ARRAY of at * int (* false for unboxed, true for boxed + len*)
-      | S_ELEM (* first array, then index *)
-      | S_STA (* first array, then index, then value *)
+      | S_ARRAY of at * int (* false for unboxed, true for boxed + len *) (* STACK *)
+      | S_ELEM (* first array, then index *) (* STACK *)
+      | S_STA (* first array, then index, then value *) (* STACK *)
   end
 
 module Interpreter =

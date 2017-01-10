@@ -15,3 +15,7 @@ _build/
 rc.byte
 rc.native
 runtime/runtime.o
+# cpp
+runtime/builtins.o
+runtime/collector.o
+runtime/libruntime.a

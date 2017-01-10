@@ -201,8 +201,10 @@ extern marray LArrmake(int n, void* ptr) {
 extern void* Larrget(marray a, int n) {
   void * ret = a->buf[n];
   int memt = mem_type[a];
+  Tgc_inc_ref(memt, (void*)ret);
   builtin_mark((void*)a);
   Tgc_collect();
+  Tgc_dec_ref(memt, (void*)ret);
   if (memt == 2) {
     MARK_PRIMITIVE;
   } else {

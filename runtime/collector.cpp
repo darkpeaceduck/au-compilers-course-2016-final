@@ -42,9 +42,14 @@ public:
     printf("dec Ref end %p is %d\n", protect, refs);
   }
   void depency(RegisterItem *obj) {
+	  printf("depency %p %p\n", protect, obj->protect);
     sub_objects.insert(obj);
+    for(auto item : this->sub_objects) {
+    	printf("sub_obj %p\n", item->protect);
+    }
   }
   void remove_depency(RegisterItem * ptr) {
+	  printf("removed depency %p %p\n", protect, ptr->protect);
 	  auto itr = sub_objects.find(ptr);
 	  if(itr != sub_objects.end()){
 		  sub_objects.erase(itr);
@@ -107,13 +112,14 @@ extern "C" {
    */
   extern void Tgc_ref(void* a, int vt, void* v, int nt, void* n) {
     Tgc_dec_ref(vt, v);
+    if (is_valid(vt, v))
     if (registry.count(v))
     	registry[a]->remove_depency(registry[v]);
     Tgc_inc_ref(nt, n);
     if (is_valid(nt, n)) {
       registry[a]->depency(registry[n]);
     }
-    printf("Ref\n");
+    printf("Ref %p %p %p\n", a, v, n);
     registry[a]->print_info();
   }
 

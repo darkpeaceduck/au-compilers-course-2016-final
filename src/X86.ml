@@ -181,6 +181,7 @@ module Compile =
         let pre, post = precall' n in
         pre, (X86Free (2 * n))::post
       in
+      (* prologue and epilogur for funcs with gc types for builtin *)
       let precall_t_b n =
         let rec precall' = function
           | 0 ->
@@ -200,62 +201,23 @@ module Compile =
 	| i::code' ->
 	   let x86code =
              match i with
-             (*| S_PUSH n ->
-                let p = env#allocate in
-                env#push p;
-                (match n with
-                 | V.Int i -> [X86Binop ("->", L i, p)]
-                 | V.String s -> [X86Binop ("->", env#add_string s, p)])*)
              | S_PUSH n ->
                 let t, v = env#allocate_t in
                 env#push_t t v;
                 (match n with
                  | V.Int i -> [X86Binop ("->", L 0, t); X86Binop ("->", L i, v)]
                  | V.String s -> [X86Binop ("->", L 1, t); X86Binop ("->", env#add_string s, v)])
-             (*| S_POP -> env#pop; []*)
              | S_POP -> env#pop_t; []
-             (*| S_LD x ->
-                let m = env#get_local x in
-                let s = env#allocate in
-                env#push s;
-                mov_w_reg m s*)
              | S_LD x ->
                 let t, v = env#get_local_t x in
                 let at, av = env#allocate_t in
                 env#push_t at av;
                 mov_w_reg t at @ mov_w_reg v av
-             (*| S_ST x ->
-                let s = env#pop in
-                let m = env#create_local x in
-                if s = m then [] else mov_w_reg s m*)
              | S_ST x ->
                 let t, v = env#pop_t in
                 let lt, lv = env#create_local_t x in
                 List.concat [mov_w_reg t lt; mov_w_reg v lv;
                              [X86Push v; X86Push t; X86Call "Tgc_inc_ref"; X86Free 2]]
-             (*| S_BINOP o ->
-                let l = env#pop in
-                let r = env#pop in
-                let cmds =
-                  match o with
-                  | "+" | "-" | "*" ->
-                     let pre, post, l', r' =
-                       match l, r with
-                       | R _, _ | _, R _ -> [], [], l, r
-                       | _ -> [X86Binop ("->", r, eax)], [X86Binop ("->", eax, r)], l, eax
-                     in
-                     pre @ [X86Binop (o, l', r')] @ post
-                  | "/" | "%" -> [X86Binop ("->", r, eax); X86Cdq; X86Div l; X86Binop ("->", (if o = "/" then eax else edx), r)]
-                  | _ ->
-                     let pre, post, l', r' =
-                       match l, r with
-                       | R _, _ | _, R _ -> [], [], l, r
-                       | _ -> [X86Binop ("->", r, ecx)], [], l, ecx
-                     in
-                     pre @ [X86Binop ("@", eax, eax); X86Binop ("=", l', r'); X86Set (o, al); X86Binop ("->", eax, r)] @ post
-                in
-                env#push r;
-                cmds*)
              | S_BINOP o ->
                 let t, l = env#pop_t in
                 let t, r = env#pop_t in
@@ -284,21 +246,12 @@ module Compile =
              | S_CJMP (c, l) ->
                 let s = env#pop in
                 [X86Binop ("->", s, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)]
-             (*| S_CALL (name, args) -> 
-                let pre, post = precall (List.length args) in
-                List.concat [pre; [X86Call name]; post]*)
              | S_CALL (name, args) ->
                 let pre, post = precall_t (List.length args) in
                 List.concat [pre; [X86Call name]; post]
-             (*| S_BUILTIN (name, argsn) ->
-                let pre, post = precall argsn in
-                List.concat [pre; [X86Call ("L"^name)]; post]*)
              | S_BUILTIN (name, argsn) ->
                 let pre, post = precall_t_b argsn in
                 List.concat [pre; [X86Call ("L"^name)]; post]
-             (* S_RET ->
-                let s = env#pop in
-                [X86Binop ("->", s, eax)]*)
              | S_RET ->
                 let dec_ref_args =
                   M.fold
@@ -321,7 +274,6 @@ module Compile =
                 let t, v = env#allocate_t in
                 env#push_t t v;
                 [X86Push i; X86Push a; X86Call ("Larrget"); X86Free 2; X86Binop ("->", ecx, t); X86Binop ("->", eax, v)]
-                (* List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx AR v] *)
              | S_STA ->
                 let vt, v = env#pop_t in
                 let _, i = env#pop_t in

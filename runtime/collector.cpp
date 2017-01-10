@@ -18,6 +18,11 @@ public:
   RegisterItem() {}
   RegisterItem(void * ptr) : protect(ptr), refs(0), sub_objects() {}
   void inc_ref() {
+	/* anonymous fun res case */
+	if (this->refs == 0) {
+		for (auto item : this->sub_objects)
+			item->inc_ref();
+	}
     this->refs++;
   }
   void dec_ref() {

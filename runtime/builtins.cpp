@@ -38,6 +38,19 @@ extern "C" {
 // STRING
 
 extern void* gc_malloc(size_t size);
+
+extern "C" {
+extern void Tgc_inc_ref(int t, void* p);
+extern void Tgc_dec_ref(int t, void* p);
+extern void Tgc_ref(void* a, int vt, void* v, int nt, void* n);
+extern void Tgc_collect();
+}
+
+
+static void builtin_mark(void *ptr) {
+	Tgc_inc_ref(1, ptr);
+	Tgc_dec_ref(1, ptr);
+}
     
 typedef struct {
   int len;
@@ -71,13 +84,18 @@ extern mstring Lstrset(mstring s, int i, int c) {
 }
 
 extern int Lstrget(mstring s, int i) {
+  int ret = s->buf[i];
+  builtin_mark((void*)s);
+  Tgc_collect();
   MARK_PRIMITIVE;
-  return s->buf[i];
+  return ret;
 }
 
 extern mstring Lstrdup(mstring s) {
   mstring d = stralloc(s->len);
   strncpy(d->buf, s->buf, s->len);
+  builtin_mark((void*)s);
+  Tgc_collect();
   MARK_PTR;
   return d;
 }
@@ -86,6 +104,9 @@ extern mstring Lstrcat(mstring s1, mstring s2) {
   mstring r = stralloc(s1->len + s2->len);
   strncpy(r->buf, s1->buf, s1->len);
   strncpy(r->buf + s1->len, s2->buf, s2->len);
+  builtin_mark((void*)s1);
+  builtin_mark((void*)s2);
+  Tgc_collect();
   MARK_PTR;
   return r;
 }
@@ -93,6 +114,9 @@ extern mstring Lstrcat(mstring s1, mstring s2) {
 extern int Lstrcmp(mstring s1, mstring s2) {
   int res = strncmp(s1->buf, s2->buf, MIN(s1->len, s2->len));
   if (res == 0) res = s1->len - s2->len;
+  builtin_mark((void*)s1);
+	builtin_mark((void*)s2);
+	Tgc_collect();
   MARK_PRIMITIVE;
   if (res < 0) {
     return -1;
@@ -104,13 +128,18 @@ extern int Lstrcmp(mstring s1, mstring s2) {
 }
 
 extern int Lstrlen(mstring s) {
+  int ret = s->len;
+  builtin_mark((void*)s);
+  Tgc_collect();
   MARK_PRIMITIVE;
-  return s->len;
+  return ret;
 }
 
 extern mstring Lstrsub(mstring s, int i, int l) {
   mstring r = stralloc(l);
   strncpy(r->buf, s->buf + i, l);
+  builtin_mark((void*)s);
+  	Tgc_collect();
   MARK_PTR;
   return r;
 }
@@ -131,11 +160,15 @@ static marray arralloc(int n) {
   return a;
 }
 
+
 extern "C" {
 
 extern int Larrlen(marray a) {
+  int ret = a->len;
+  builtin_mark((void*)a);
+  Tgc_collect();
   MARK_PRIMITIVE;
-  return a->len;
+  return ret;
 }
 
 extern marray Larrmake(int n, int v) {
@@ -153,18 +186,27 @@ extern marray LArrmake(int n, void* ptr) {
   mem_type[(void*)a] = 3;
   for (int i = 0; i < n; i++) {
     a->buf[i] = ptr;
+    Tgc_ref((void*)a, 0, NULL, 1, ptr);
   }
+
+  builtin_mark(ptr);
+  Tgc_collect();
+
   MARK_PTR;
   return a;
 }
 
 extern void* Larrget(marray a, int n) {
-  if (mem_type[a] == 2) {
+  void * ret = a->buf[n];
+  int memt = mem_type[a];
+  builtin_mark((void*)a);
+  Tgc_collect();
+  if (memt == 2) {
     MARK_PRIMITIVE;
   } else {
     MARK_PTR;
   }
-  return a->buf[n];
+  return ret;
 }
 
 }

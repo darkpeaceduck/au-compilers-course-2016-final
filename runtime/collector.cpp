@@ -131,10 +131,10 @@ extern "C" {
   extern void Tgc_collect() {
     for(auto iter : free_q) {
       void * ptr = iter;
-      free(ptr);
       auto it = registry.find(ptr);
       delete it->second;
       registry.erase(it);
+      free(ptr);
     }
     Tgc_clear_q();
   }

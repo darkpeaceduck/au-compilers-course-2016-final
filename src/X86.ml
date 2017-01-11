@@ -235,7 +235,7 @@ module Compile =
                 let t, v = env#pop_t in
                 let is_new, lt, lv = env#create_local_t x in
                 let dec_prev = if not is_new then GC.dec_ref lt lv else [] in
-                List.concat [dec_prev; mov_w_reg t lt; mov_w_reg v lv; GC.inc_ref t v]
+                List.concat [GC.dec_ref lt lv; mov_w_reg t lt; mov_w_reg v lv; GC.inc_ref t v]
              | S_BINOP o ->
                 let t, l = env#pop_t in
                 let t, r = env#pop_t in

@@ -4,7 +4,7 @@ MTESTS=$(sort $(basename $(wildcard mtest*.expr)))
 #MTESTS=mtest004
 #MTESTS=
 STESTS=$(sort $(basename $(wildcard test*.expr)))
-#STESTS=test029
+#STESTS=test030
 #STESTS=
 TESTS=$(MTESTS) $(STESTS) # all
 #TESTS=$(MTESTS) $(sort $(filter-out test030, $(filter-out test029, $(STESTS)))) # strings builtins
@@ -14,7 +14,7 @@ TESTS=$(MTESTS) $(STESTS) # all
 TESTSI=$(addsuffix .i, $(TESTS))
 TESTSS=$(addsuffix .s, $(TESTS))
 TESTSO=$(addsuffix .o, $(TESTS))
-VALGRIND_ARGS=valgrind --leak-check=full --show-leak-kinds=all --show-reachable=no --error-exitcode=1
+VALGRIND_ARGS=valgrind --leak-check=full --show-leak-kinds=all --show-reachable=no --error-exitcode=1 --undef-value-errors=no
 
 DIFLAGS=
 

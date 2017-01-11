@@ -1,0 +1,30 @@
+fun f2 (i)
+begin
+	A := Arrmake(i, 0);
+	for j := 0, j < i, j := j+1 do
+    	A[j] := j;
+  		A[0] := strdup(strdup(strdup("ele")));
+  	od;
+  	return A
+end
+
+fun f1 (A)
+begin
+  B := {[1,2,3], "hello"};
+  rs := arrlen(A);
+  for i := 0, i < rs, i := i+1 do
+    A[i] := B;
+    A[i][1] := strdup(A[i][1])
+  od;
+  for i := 0, i < rs, i := i+3 do
+    A[i] := f2(i)
+  od;
+  return 0
+end
+
+fun g (A)
+begin
+	return f1(A)
+end
+
+write(g(Arrmake(100, {})))

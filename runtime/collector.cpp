@@ -59,7 +59,6 @@ public:
 static map<void*, RegisterItem *> registry;
 
 extern void* gc_malloc(size_t size) {
-  // printf("ALLOC\n");
   void* ptr = malloc(size);
   registry[ptr] = new RegisterItem(ptr);
   return ptr;
@@ -130,15 +129,12 @@ extern "C" {
    * before ret
    */
   extern void Tgc_collect() {
-    // printf("SIZE %d\n", free_q.size());
     for(auto iter : free_q) {
       void * ptr = iter;
-      // if (t == 0 || (int) ptr != (int) dp) {
       free(ptr);
       auto it = registry.find(ptr);
       delete it->second;
       registry.erase(it);
-      // }
     }
     Tgc_clear_q();
   }

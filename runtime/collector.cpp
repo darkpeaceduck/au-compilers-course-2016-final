@@ -49,11 +49,6 @@ public:
   int refs_cnt() {
     return this->refs;
   }
-  void print_info() {
-    for(auto item : this->sub_objects) {
-      item->print_info();
-    }
-  }
 };
 
 static map<void*, RegisterItem *> registry;
@@ -77,10 +72,6 @@ extern "C" {
   /**
    *
    */
-  extern void Lgc_info(void* p) {
-    registry[p]->print_info();
-  }
-
   /**
    * assign
    * t = 0 for primitive, 1 otherwise (means array or string)
@@ -108,7 +99,6 @@ extern "C" {
     if (is_valid(nt, n)) {
       registry[a]->depency(registry[n]);
     }
-    registry[a]->print_info();
   }
 
   /**

@@ -75,12 +75,12 @@ static int is_valid(int t, void* p) {
 extern "C" {
 
   /**
-   * 
+   *
    */
   extern void Lgc_info(void* p) {
     registry[p]->print_info();
   }
-  
+
   /**
    * assign
    * t = 0 for primitive, 1 otherwise (means array or string)
@@ -98,10 +98,12 @@ extern "C" {
    * a for array, v for prev value, n for new value
    */
   extern void Tgc_ref(void* a, int vt, void* v, int nt, void* n) {
-    Tgc_dec_ref(vt, v);
-    if (is_valid(vt, v))
-    if (registry.count(v))
-    	registry[a]->remove_depency(registry[v]);
+	if (v != n) {
+		Tgc_dec_ref(vt, v);
+		if (is_valid(vt, v))
+		if (registry.count(v))
+			registry[a]->remove_depency(registry[v]);
+	}
     Tgc_inc_ref(nt, n);
     if (is_valid(nt, n)) {
       registry[a]->depency(registry[n]);

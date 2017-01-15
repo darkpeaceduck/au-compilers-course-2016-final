@@ -1,0 +1,11 @@
+fun printMatrix (M)
+begin
+  rs := arrlen (M);
+  write(rs);
+  if rs == 0 then
+    return 0
+  fi;
+  return 1
+end
+
+write(printMatrix({}))

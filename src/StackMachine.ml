@@ -22,7 +22,7 @@ module Instrs =
       | S_ARRAY of at * int (* false for unboxed, true for boxed + len *) (* STACK *)
       | S_ELEM (* first array, then index *) (* STACK *)
       | S_STA (* first array, then index, then value *) (* STACK *)
-      | S_ARRAY_END (* sanya says it's gonna work, sanya never lies *)
+      | S_ARRAY_END (* end action of creating an array *)
   end
 
 module Interpreter =

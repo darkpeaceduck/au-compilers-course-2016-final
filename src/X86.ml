@@ -161,7 +161,7 @@ module Compile =
   struct
     open StackMachine.Instrs
     module V = Language.Value
-    let stack_program env code =
+    let stack_program env name code =
       (* moving from opnd to opnd with register if needed *)
       let mov_w_reg ?(r=eax) f t =
         match f, t with
@@ -262,8 +262,8 @@ module Compile =
              | S_LBL l -> [X86Lbl l]
              | S_JMP l -> [X86Jmp l]
              | S_CJMP (c, l) ->
-                let s = env#pop in
-                [X86Binop ("->", s, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)]
+                let _, v = env#pop_t in
+                [X86Binop ("->", v, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)]
              | S_CALL (name, args) ->
                 let pre, post = precall_t (List.length args) in
                 List.concat [pre; [X86Call name]; post]
@@ -273,7 +273,7 @@ module Compile =
              | S_END -> (GC.dec_ref_args env) @ GC.collect
              | S_RET ->
                 let t, v = env#pop_t in
-                (GC.inc_ref t v) @ (GC.dec_ref_args env) @ (GC.collect) @ (GC.dec_ref t v) @ (GC.clear_q) @ [X86Binop ("->", t, ecx); X86Binop ("->", v, eax)]
+                (GC.inc_ref t v) @ (GC.dec_ref_args env) @ (GC.collect) @ (GC.dec_ref t v) @ (GC.clear_q) @ [X86Binop ("->", t, ecx); X86Binop ("->", v, eax)] @ [X86Jmp (name^"_ret")]
              | S_ARRAY (b, n) ->
                 let name = match b with Unboxed -> "arrmake" | _ -> "Arrmake" in
                 let t, v = env#allocate_t in
@@ -384,7 +384,7 @@ module Build =
     let compile_fdef env (name, args, s_body) =
       env#clear;
       List.iteri (fun ind arg -> env#set_local_t arg @@ F (2 * ind)) args;
-      let code = Compile.stack_program env s_body in
+      let code = Compile.stack_program env name s_body in
       let inc_ref_args = make_inc_ref_args env args in
       let push_regs, pop_regs = regs_to_stack env#used_regs in
       List.concat
@@ -394,6 +394,7 @@ module Build =
          push_regs;
          [X86Allocate env#allocated_total];
          code;
+         [X86Lbl (name^"_ret")];
          [X86Free env#allocated_total];
          pop_regs;
          [X86Leave];
@@ -401,7 +402,7 @@ module Build =
         
     let compile_main env s_main =
       env#clear;
-      let code = Compile.stack_program env s_main in
+      let code = Compile.stack_program env "main" s_main in
       let push_regs, pop_regs = regs_to_stack env#used_regs in
       List.concat
         [[X86Lbl "main"];
@@ -409,6 +410,7 @@ module Build =
          push_regs;
          [X86Allocate env#allocated_total];
          code;
+         [X86Lbl "main_ret"];
          [X86Free env#allocated_total];
          pop_regs;
          [X86Binop ("@", eax, eax)];

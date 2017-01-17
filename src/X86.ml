@@ -147,7 +147,8 @@ module GC =
   struct
     let inc_ref t p = [X86Push p; X86Push t; X86Call "Tgc_inc_ref"; X86Free 2]
     let dec_ref t p = [X86Push p; X86Push t; X86Call "Tgc_dec_ref"; X86Free 2]
-    let arr_ref a vt v nt n = [X86Push n; X86Push nt; X86Push v; X86Push vt; X86Push a; X86Call "Tgc_ref"; X86Free 5]
+    let arr_ref a nt n = [X86Push n; X86Push nt; X86Push a; X86Call "Tgc_ref"; X86Free 3]
+    let single_ref t a = [X86Push a; X86Push t; X86Call "Tgc_single_ref"; X86Free 2]
     let collect = [X86Call "Tgc_collect"]
     let dec_ref_args env =
       M.fold
@@ -234,7 +235,7 @@ module Compile =
              | S_ST x ->
                 let t, v = env#pop_t in
                 let is_new, lt, lv = env#create_local_t x in
-                List.concat [mov_w_reg t lt; mov_w_reg v lv;]
+                List.concat [GC.single_ref t v; mov_w_reg t lt; mov_w_reg v lv;]
              | S_BINOP o ->
                 let t, l = env#pop_t in
                 let t, r = env#pop_t in
@@ -292,10 +293,9 @@ module Compile =
                 let at, a = env#pop_t in
                 env#push_t at a;
                 List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx v AR;
-                             [X86Push v; X86Push vt;
-                              X86Push i; X86Push a; X86Call ("Larrget"); X86Free 2; X86Push eax; X86Push ecx;
+                             [X86Push i; X86Push a; X86Call ("Larrget"); X86Free 2; X86Push eax; X86Push ecx;
                               X86Push a;
-                              X86Call "Tgc_ref"; X86Free 5]]
+                              X86Call "Tgc_ref"; X86Free 3]]
            in
 	   x86code @ (compile code')
       in
@@ -363,16 +363,16 @@ module Show =
 module Build =
   struct
     let make_inc_ref_args env args =
-      List.concat @@
+      (List.concat @@
         BatList.mapi
           (fun ind arg -> let t, v = env#get_local_t arg in GC.inc_ref t v)
-          args
+          args) @ (GC.inc_ref (L 0) (L 0))
           
     let make_dec_ref_args env args =
-      List.concat @@
+       (GC.dec_ref (L 0) (L 0)) @ (List.concat @@
         BatList.mapi
           (fun ind arg -> let t, v = env#get_local_t arg in GC.dec_ref t v)
-          args
+          args)
          
     let regs_to_stack regs = List.map (fun x -> X86Push x) regs, List.map (fun x -> X86Pop x) @@ List.rev regs
 

@@ -40,7 +40,7 @@ extern int Lwrite(int x) {
 extern void* gc_malloc(size_t size);
 
 extern "C" {
-extern void Tgc_ref(void* a, int vt, void* v, int nt, void* n);
+extern void Tgc_ref(void* a, int nt, void* n);
 }
 
 
@@ -162,7 +162,7 @@ extern marray LArrmake(int n, void* ptr) {
 	mem_type[(void*) a] = 3;
 	for (int i = 0; i < n; i++) {
 		a->buf[i] = ptr;
-		Tgc_ref((void*) a, 0, NULL, 1, ptr);
+		Tgc_ref((void*) a, 1, ptr);
 	}
 
 	MARK_PTR;

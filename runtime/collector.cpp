@@ -108,9 +108,15 @@ extern void Tgc_inc_ref(int t, void* p) {
 
 extern void Tgc_dec_ref(int t, void* p);
 
-extern void Tgc_ref(void* a, int vt, void* v, int nt, void* n) {
+extern void Tgc_ref(void* a, int nt, void* n) {
 	if (is_valid(nt, n)) {
 		registry[a]->add_depency(registry[n]);
+	}
+}
+
+extern void Tgc_single_ref(int t, void * ptr) {
+	if (is_valid(t, ptr)) {
+		registry[ptr]->mark_global();
 	}
 }
 

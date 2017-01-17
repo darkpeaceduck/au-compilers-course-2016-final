@@ -1,0 +1,20 @@
+fun alloc()
+begin
+    B := strdup("A");
+	return B
+end
+
+fun print(A)
+begin
+	return strlen(A)
+end
+
+fun empty()
+begin
+	return 0
+end
+
+B := alloc();
+empty();
+write(print(B));
+write(print(B))

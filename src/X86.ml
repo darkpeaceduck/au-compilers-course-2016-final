@@ -234,8 +234,7 @@ module Compile =
              | S_ST x ->
                 let t, v = env#pop_t in
                 let is_new, lt, lv = env#create_local_t x in
-                let dec_prev = if not is_new then GC.dec_ref lt lv else [] in
-                List.concat [GC.dec_ref lt lv; mov_w_reg t lt; mov_w_reg v lv; GC.inc_ref t v]
+                List.concat [mov_w_reg t lt; mov_w_reg v lv;]
              | S_BINOP o ->
                 let t, l = env#pop_t in
                 let t, r = env#pop_t in
@@ -270,19 +269,17 @@ module Compile =
              | S_BUILTIN (name, argsn) ->
                 let pre, post = precall_t_b argsn in
                 List.concat [pre; [X86Call ("L"^name)]; post]
-             | S_END -> (GC.dec_ref_args env) @ GC.collect
+             | S_END ->  GC.collect
              | S_RET ->
                 let t, v = env#pop_t in
-                (GC.inc_ref t v) @ (GC.dec_ref_args env) @ (GC.collect) @ (GC.dec_ref t v) @ (GC.clear_q) @ [X86Binop ("->", t, ecx); X86Binop ("->", v, eax)] @ [X86Jmp (name^"_ret")]
+                (GC.inc_ref t v) @ (GC.collect) @ (GC.dec_ref t v)  @ [X86Binop ("->", t, ecx); X86Binop ("->", v, eax)] @ [X86Jmp (name^"_ret")]
              | S_ARRAY (b, n) ->
                 let name = match b with Unboxed -> "arrmake" | _ -> "Arrmake" in
                 let t, v = env#allocate_t in
                 env#push_t t v;
-                List.concat [[X86Push (L 0); X86Push (L n); X86Call ("L"^name); X86Free 2; X86Binop ("->", ecx, t); X86Binop ("->", eax, v)]; GC.inc_ref t v]
+                List.concat [[X86Push (L 0); X86Push (L n); X86Call ("L"^name); X86Free 2; X86Binop ("->", ecx, t); X86Binop ("->", eax, v)];]
              | S_ARRAY_END ->
-                let t, v = env#pop_t in
-                env#push_t t v;
-                GC.dec_ref t v;
+                []
              | S_ELEM ->
                 let t, i = env#pop_t in
                 let t, a = env#pop_t in
@@ -370,6 +367,12 @@ module Build =
         BatList.mapi
           (fun ind arg -> let t, v = env#get_local_t arg in GC.inc_ref t v)
           args
+          
+    let make_dec_ref_args env args =
+      List.concat @@
+        BatList.mapi
+          (fun ind arg -> let t, v = env#get_local_t arg in GC.dec_ref t v)
+          args
          
     let regs_to_stack regs = List.map (fun x -> X86Push x) regs, List.map (fun x -> X86Pop x) @@ List.rev regs
 
@@ -386,15 +389,21 @@ module Build =
       List.iteri (fun ind arg -> env#set_local_t arg @@ F (2 * ind)) args;
       let code = Compile.stack_program env name s_body in
       let inc_ref_args = make_inc_ref_args env args in
+      let dec_ref_args = make_dec_ref_args env args in
       let push_regs, pop_regs = regs_to_stack env#used_regs in
       List.concat
         [[X86Lbl name];
          [X86Enter];
-         inc_ref_args;
          push_regs;
+         inc_ref_args;
          [X86Allocate env#allocated_total];
          code;
          [X86Lbl (name^"_ret")];
+         [X86Push eax];
+         [X86Push ecx];
+         dec_ref_args;
+         [X86Pop ecx];
+         [X86Pop eax];
          [X86Free env#allocated_total];
          pop_regs;
          [X86Leave];

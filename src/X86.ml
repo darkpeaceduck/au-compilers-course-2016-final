@@ -279,8 +279,7 @@ module Compile =
                 let t, v = env#allocate_t in
                 env#push_t t v;
                 List.concat [[X86Push (L 0); X86Push (L n); X86Call ("L"^name); X86Free 2; X86Binop ("->", ecx, t); X86Binop ("->", eax, v)];]
-             | S_ARRAY_END ->
-                []
+             | S_ARRAY_END -> []
              | S_ELEM ->
                 let t, i = env#pop_t in
                 let t, a = env#pop_t in

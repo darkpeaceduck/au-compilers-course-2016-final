@@ -1,7 +1,7 @@
 THIS_FILE=$(lastword $(MAKEFILE_LIST))
 
 MTESTS=$(sort $(basename $(wildcard mtest*.expr)))
-#MTESTS=mtest005
+#MTESTS=mtest008
 #MTESTS=
 STESTS=$(sort $(basename $(wildcard test*.expr)))
 #STESTS=test030

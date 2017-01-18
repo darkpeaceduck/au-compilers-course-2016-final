@@ -22,7 +22,6 @@ module Instrs =
       | S_ARRAY of at * int (* false for unboxed, true for boxed + len *) (* STACK *)
       | S_ELEM (* first array, then index *) (* STACK *)
       | S_STA (* first array, then index, then value *) (* STACK *)
-      | S_ARRAY_END (* end action of creating an array *)
   end
 
 module Interpreter =
@@ -63,7 +62,6 @@ module Interpreter =
         | _ as i ->
            run' @@
              match i with
-             | S_ARRAY_END -> ln + 1
              | S_PUSH n -> env#push n; ln + 1
              | S_POP -> env#pop; ln + 1
              | S_LD x -> env#ld x; ln + 1
@@ -146,7 +144,7 @@ module Compile =
               | None -> [S_BUILTIN (name, List.length args)])
         | E.UArray arr | E.BArray arr as a ->
            let bit t = match t with E.UArray _ -> Unboxed | _ -> Boxed in
-           [S_ARRAY (bit a, List.length arr)] @ (List.concat @@ BatList.mapi (fun i v -> List.concat [[S_PUSH (V.Int i)]; expr v; [S_STA]]) arr) @ [S_ARRAY_END]
+           [S_ARRAY (bit a, List.length arr)] @ (List.concat @@ BatList.mapi (fun i v -> List.concat [[S_PUSH (V.Int i)]; expr v; [S_STA]]) arr)
         | E.ArrInd (arr, ind) -> List.concat [expr arr; expr ind; [S_ELEM]]
       in
       let rec stmt =

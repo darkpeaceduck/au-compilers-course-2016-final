@@ -141,6 +141,23 @@ class env = object(self)
   val strings : string list ref = ref [] (* used strings *)
   method add_string s = strings := s::!strings; D (Printf.sprintf "string%d" @@ List.length !strings - 1)
   method used_strings = List.rev !strings
+  
+  val gc_ping_counter : int ref = ref 0
+  val gc_ping_freezer : int ref = ref 0
+  val gc_ping_counter_bound  : int = 2
+  method freeze_gc_ping_counter = gc_ping_freezer := 1
+  method unfreeze_gc_ping_counter = gc_ping_freezer := 0
+  method next_gc_instruction =
+    if !gc_ping_freezer = 1 then
+      0
+    else (
+      gc_ping_counter := !gc_ping_counter + 1;
+      if !gc_ping_counter = gc_ping_counter_bound then (
+        gc_ping_counter := 0;
+        1)
+      else
+        0
+    )
 end
 
 module GC =

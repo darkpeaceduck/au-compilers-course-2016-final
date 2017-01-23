@@ -309,6 +309,12 @@ module Compile =
                 env#push_t at a;
                 List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx v AR; (* set value *)
                              GC.arr_ref a vt v; (* gc *)]
+             | S_INCOSTISTENT_MARK_B ->
+                env#freeze_gc_ping_counter;
+                []
+             | S_INCOSTISTENT_MARK_E ->
+                env#unfreeze_gc_ping_counter;
+                []
            in
 	   x86code @ (compile code')
       in

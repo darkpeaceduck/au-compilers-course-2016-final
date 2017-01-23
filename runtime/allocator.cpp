@@ -187,6 +187,7 @@ CachedAllocator::CachedAllocator(const size_t max_sz, const size_t maxpools,
 }
 
 void *CachedAllocator::allocate(size_t sz) {
+	last_memory_counter += sz;
 	return priv->allocate(sz);
 }
 
@@ -194,3 +195,10 @@ void CachedAllocator::deallocate(void *ptr) {
 	return priv->deallocate(ptr);
 }
 
+size_t CachedAllocator::last_memory_allocated() {
+	return last_memory_counter;
+}
+
+void CachedAllocator::clear_last_memory_counter() {
+	last_memory_counter = 0;
+}

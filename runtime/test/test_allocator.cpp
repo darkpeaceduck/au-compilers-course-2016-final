@@ -21,6 +21,7 @@ void check_mem(char * mem, size_t sz) {
 		assert(mem[i] == i % 109);
 }
 void check(CachedAllocator &alloc, size_t sz, size_t count) {
+	alloc.clear_last_memory_counter();
 	std::cerr << "Checking " << sz << " " << count << std::endl;
 	std::vector<void*> mems;
 	for(size_t i = 0; i < count; i++) {
@@ -30,6 +31,7 @@ void check(CachedAllocator &alloc, size_t sz, size_t count) {
 	}
 	for(auto mem : mems)
 		alloc.deallocate(mem);
+	assert(sz * count == alloc.last_memory_allocated());
 }
 
 int main() {

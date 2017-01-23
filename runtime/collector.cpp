@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "allocator.h"
 using namespace std;
 
 class RegisterItem {
@@ -54,6 +55,7 @@ public:
 
 static map<void*, RegisterItem *> registry;
 static set<RegisterItem *> reachable;
+static CachedAllocator alloc(20000, 4, 10);
 static int scope_ptr = 0;
 
 static bool in_main_scope() {
@@ -69,7 +71,7 @@ static void clean_ptr(void * ptr) {
 	if (it != registry.end()) {
 		delete it->second;
 		registry.erase(it);
-		free(ptr);
+		alloc.deallocate(ptr);
 	}
 }
 
@@ -85,7 +87,7 @@ void collect_dfs(RegisterItem * root) {
 
 
 extern void* gc_malloc(size_t size) {
-	void* ptr = malloc(size);
+	void* ptr = alloc.allocate(size);
 	RegisterItem * item = new RegisterItem(ptr);
 	registry[ptr] = item;
 	if (in_main_scope()) {

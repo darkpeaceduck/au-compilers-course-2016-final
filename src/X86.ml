@@ -315,7 +315,13 @@ module Compile =
                 env#unfreeze_gc_ping_counter;
                 []
            in
-	   x86code @ (compile code')
+     let x86postGC = 
+      if env#next_gc_instruction = 0 then
+      []
+     else
+      GC.ping (L 0)
+     in
+	   x86code @ x86postGC @ (compile code')
       in
       compile code
   end

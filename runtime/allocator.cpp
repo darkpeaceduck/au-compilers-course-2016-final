@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "allocator.h"
 
 #define container_of(ptr, type, member) ({            \
  (type *)( (char *)ptr - offsetof(type,member) );})
@@ -130,7 +131,7 @@ public:
 	}
 };
 
-class CachedAllocator {
+class CachedAllocatorPriv {
 	struct StorageItem {
 		size_t pool_index;
 		char data[0];
@@ -145,10 +146,13 @@ class CachedAllocator {
 		return (sizeof(sz) * 8) - __builtin_clzll(sz);
 	}
 public:
-	CachedAllocator(const size_t max_sz, const size_t maxpools, const size_t numpages):
-		max_sz(max_sz), maxpools(maxpools), numpages(numpages) {
+	CachedAllocatorPriv(const size_t max_sz, const size_t maxpools,
+			const size_t numpages) :
+			max_sz(max_sz), maxpools(maxpools), numpages(numpages) {
 		for (size_t sz = 1; sz <= max_sz; sz *= 2) {
-			pools.push_back(std::make_shared<FixedSizeAllocator>(sz, numpages, maxpools));
+			pools.push_back(
+					std::make_shared<FixedSizeAllocator>(sz, numpages,
+							maxpools));
 		}
 	}
 	void * allocate(size_t sz) {
@@ -157,7 +161,7 @@ public:
 		if (index >= pools.size()) {
 			throw std::runtime_error("too big allocating size");
 		}
-		StorageItem * item = (StorageItem *)pools[index]->allocate();
+		StorageItem * item = (StorageItem *) pools[index]->allocate();
 		item->pool_index = index;
 		return item->data;
 	}
@@ -166,3 +170,17 @@ public:
 		pools[item->pool_index]->deallocate(item);
 	}
 };
+
+CachedAllocator::CachedAllocator(const size_t max_sz, const size_t maxpools,
+		const size_t numpages) {
+	priv = std::make_shared<CachedAllocatorPriv>(max_sz, maxpools, numpages);
+}
+
+void *CachedAllocator::allocate(size_t sz) {
+	return priv->allocate(sz);
+}
+
+void CachedAllocator::deallocate(void *ptr) {
+	return priv->deallocate(ptr);
+}
+

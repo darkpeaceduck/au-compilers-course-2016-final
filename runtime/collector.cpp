@@ -12,29 +12,13 @@ using namespace std;
 
 class RegisterItem {
 	void* protect;
-	enum RegisterItemType{
-		GLOBAL, LOCAL
-	} type;
-	int global_cnt = 0;
 	multiset<RegisterItem*> sub_objects;
 	typedef multiset<RegisterItem*>::iterator RegisterItemIterator;
 public:
 	RegisterItem() {
 	}
 	RegisterItem(void * ptr) :
-			protect(ptr), type(LOCAL), sub_objects() {
-	}
-	void mark_global() {
-		type = GLOBAL;
-		global_cnt++;
-	}
-	void mark_local() {
-		global_cnt--;
-		if (global_cnt == 0)
-			type = LOCAL;
-	}
-	bool is_global() {
-		return type == GLOBAL;
+			protect(ptr), sub_objects() {
 	}
 	void add_depency(RegisterItem *obj) {
 		sub_objects.insert(obj);
@@ -54,13 +38,10 @@ public:
 };
 
 static map<void*, RegisterItem *> registry;
+static set<RegisterItem*> roots;
 static set<RegisterItem *> reachable;
 static CachedAllocator alloc(20000, 4, 10);
-static int scope_ptr = 0;
-
-static bool in_main_scope() {
-	return scope_ptr == 0;
-}
+static const size_t COLLECT_BOUND = 500;
 
 static bool is_valid(int t, void* p) {
 	return t && registry.count(p);
@@ -85,59 +66,12 @@ void collect_dfs(RegisterItem * root) {
 	}
 }
 
-
-extern void* gc_malloc(size_t size) {
-	void* ptr = alloc.allocate(size);
-	RegisterItem * item = new RegisterItem(ptr);
-	registry[ptr] = item;
-	if (in_main_scope()) {
-		item->mark_global();
-	}
-	return ptr;
-}
-
-
-extern "C" {
-
-extern void Tgc_clear_q() { }
-
-extern void Tgc_inc_ref(int t, void* p) {
-	scope_ptr++;
-	if (is_valid(t, p)) {
-		registry[p]->mark_global();
-	}
-}
-
-extern void Tgc_dec_ref(int t, void* p);
-
-extern void Tgc_ref(void* a, int nt, void* n) {
-	if (is_valid(nt, n)) {
-		registry[a]->add_depency(registry[n]);
-	}
-}
-
-extern void Tgc_single_ref(int t, void * ptr) {
-	if (is_valid(t, ptr)) {
-		registry[ptr]->mark_global();
-	}
-}
-
-extern void Tgc_dec_ref(int t, void* p) {
-	scope_ptr--;
-	if (is_valid(t, p)) {
-		registry[p]->mark_local();
-	}
-}
-
-extern void Tgc_collect() {
+static void gc_collect(int full) {
 	vector<void *> clean;
 	reachable.clear();
-	if (!in_main_scope()) {
-		for(auto it : registry) {
-			RegisterItem * item = it.second;
-			if (item->is_global()) {
-				collect_dfs(item);
-			}
+	if (!full) {
+		for(auto it : roots) {
+			collect_dfs(it);
 		}
 	}
 	for(auto it : registry) {
@@ -148,6 +82,52 @@ extern void Tgc_collect() {
 	}
 	for(auto ptr : clean) {
 		clean_ptr(ptr);
+	}
+}
+
+extern void* gc_malloc(size_t size) {
+	void * ptr = NULL;
+	try {
+		void* ptr = alloc.allocate(size);
+	} catch(...) {
+		ptr = NULL;
+		gc_collect(0);
+		try {
+			ptr = alloc.allocate(size);
+		} catch(...) {
+			ptr = NULL;
+		}
+	}
+	RegisterItem * item = new RegisterItem(ptr);
+	registry[ptr] = item;
+	return ptr;
+}
+
+
+extern "C" {
+
+extern void Tgc_make_root(int t, void* p) {
+	if (is_valid(t, p)) {
+		roots.insert(registry[p]);
+	}
+}
+
+extern void Tgc_remove_root(int t, void *p) {
+	if (is_valid(t, p)) {
+		roots.erase(registry[p]);
+	}
+}
+
+extern void Tgc_ref(void* a, int nt, void* n) {
+	if (is_valid(nt, n)) {
+		registry[a]->add_depency(registry[n]);
+	}
+}
+
+extern void Tgc_ping(int full) {
+	if (alloc.last_memory_allocated() > COLLECT_BOUND) {
+		gc_collect(full);
+		alloc.clear_last_memory_counter();
 	}
 }
 

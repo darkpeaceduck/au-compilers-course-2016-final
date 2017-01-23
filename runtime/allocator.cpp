@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <iostream>
 #include "allocator.h"
 
 #define container_of(ptr, type, member) ({            \
@@ -140,10 +141,10 @@ class CachedAllocatorPriv {
 	const size_t numpages;
 	const size_t max_sz;
 	std::vector<std::shared_ptr<FixedSizeAllocator>> pools;
-	static size_t order_index(size_t sz) {
+	size_t order_index(size_t sz) {
 		if (sz == 0)
 			return 0;
-		return (sizeof(sz) * 8) - __builtin_clzll(sz);
+		return (sizeof(sz) * 8) - __builtin_clz(sz);
 	}
 public:
 	CachedAllocatorPriv(const size_t max_sz, const size_t maxpools,

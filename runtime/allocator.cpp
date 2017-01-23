@@ -9,15 +9,15 @@
 #include <iostream>
 #include "allocator.h"
 
+using namespace std;
+
 #define container_of(ptr, type, member) ({            \
  (type *)( (char *)ptr - offsetof(type,member) );})
-
-const long PAGE_SIZE = sysconf(_SC_PAGESIZE);
 
 class PoolAllocator {
 	std::vector<void *> pool;
 	void * mem;
-	const size_t obj_total;
+	size_t obj_total;
 	const size_t pool_total;
 	const size_t obj_size;
 	void allocate_mem() {
@@ -36,7 +36,8 @@ class PoolAllocator {
 public:
 	PoolAllocator(const size_t obj_sz, const size_t numpages) :
 			pool(), mem(NULL), pool_total(PAGE_SIZE * numpages), obj_size(
-					obj_sz), obj_total(pool_total / obj_size) {
+					obj_sz) {
+		obj_total = pool_total / obj_size;
 		allocate_mem();
 	}
 	~PoolAllocator() {
@@ -73,21 +74,33 @@ class FixedSizeAllocator {
 	ptrdiff_t current = UNDEFINED_POOL;
 	size_t pcnt = 0;
 	std::set<size_t> full_pools;
+	std::set<size_t> non_empty_pools;
 	const size_t maxpools;
 	const size_t obj_sz;
 	const size_t numpages;
 	void allocate_pool() {
 		pools[pcnt] = std::make_shared<PoolAllocator>(obj_sz, numpages);
 		full_pools.insert(pcnt);
+		non_empty_pools.insert(pcnt);
 		pcnt++;
 	}
 	void choise_pool() {
 		if (current == UNDEFINED_POOL) {
-			if (full_pools.empty()) {
+			if (non_empty_pools.empty()) {
 				allocate_pool();
 			}
-			current = *full_pools.begin();
+			current = *non_empty_pools.begin();
 		}
+	}
+	void * allocate_move() {
+		void * ret = pools[current]->allocate();
+		auto iter = full_pools.find(current);
+		if (iter != full_pools.end())
+			full_pools.erase(iter);
+		if (pools[current]->empty()) {
+			non_empty_pools.erase(current);
+		}
+		return ret;
 	}
 	void try_free_redudant_pools() {
 		if (full_pools.size() * 2 > pools.size()) {
@@ -108,16 +121,8 @@ public:
 		if (current == UNDEFINED_POOL && pools.size() == maxpools)
 			throw std::overflow_error(
 					"can't allocate obj - all pools are full");
-		if (current == UNDEFINED_POOL || pools[current]->empty()) {
-			current = UNDEFINED_POOL;
-			choise_pool();
-		}
-		void * ret = pools[current]->allocate();
-		/* can't failed here */
-		auto iter = full_pools.find(current);
-		if (iter != full_pools.end())
-			full_pools.erase(iter);
-		StorageItem * item = (StorageItem *) ret;
+		choise_pool();
+		StorageItem * item  = (StorageItem *)allocate_move();
 		item->pool_index = current;
 		return item->data;
 	}
@@ -126,6 +131,7 @@ public:
 		StorageItem * item = container_of(ptr, StorageItem, data);
 		size_t index = item->pool_index;
 		pools[index]->deallocate(item);
+		non_empty_pools.insert(index);
 		if (pools[index]->full())
 			full_pools.insert(index);
 		try_free_redudant_pools();
@@ -150,11 +156,14 @@ public:
 	CachedAllocatorPriv(const size_t max_sz, const size_t maxpools,
 			const size_t numpages) :
 			max_sz(max_sz), maxpools(maxpools), numpages(numpages) {
-		for (size_t sz = 1; sz <= max_sz; sz *= 2) {
+		size_t sz = 1;
+		for (; sz <= max_sz; sz *= 2) {
 			pools.push_back(
 					std::make_shared<FixedSizeAllocator>(sz, numpages,
 							maxpools));
 		}
+		pools.push_back(std::make_shared<FixedSizeAllocator>(sz, numpages,
+									maxpools));
 	}
 	void * allocate(size_t sz) {
 		sz += sizeof(StorageItem);

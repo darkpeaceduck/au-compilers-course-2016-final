@@ -3,12 +3,14 @@
 #include <cassert>
 #include <memory.h>
 #include <iostream>
+#include <algorithm>
 
 const size_t check_sz[] = { 1, 2, 3, 4, 5, 10, 15, 30, 40, 100, 500, 1000, 5000,
 		10000 };
 
-const size_t max_sz = 1LL<<15;
-const size_t numpages = 2;
+
+const size_t max_sz = 10000;
+const size_t numpages = 5;
 const size_t maxpools = 2;
 
 void check_mem(char * mem, size_t sz) {
@@ -33,6 +35,7 @@ void check(CachedAllocator &alloc, size_t sz, size_t count) {
 int main() {
 	CachedAllocator alloc(max_sz, maxpools, numpages);
 	for(auto item : check_sz) {
-		check(alloc, item, max_sz / item);
+		for(size_t i = 0; i < 5; i++)
+			check(alloc, item, std::max(1UL, PAGE_SIZE * maxpools / (item+(sizeof(size_t) * 2))));
 	}
 }

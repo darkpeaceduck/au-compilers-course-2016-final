@@ -1,5 +1,10 @@
 #pragma once
 #include <memory>
+#include <unistd.h>
+
+const long PAGE_SIZE = sysconf(_SC_PAGESIZE);
+
+
 class CachedAllocatorPriv;
 class CachedAllocator {
 	std::shared_ptr<CachedAllocatorPriv> priv;

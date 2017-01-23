@@ -162,17 +162,16 @@ end
 
 module GC =
   struct
-    let inc_ref t p = [X86Push p; X86Push t; X86Call "Tgc_inc_ref"; X86Free 2]
-    let dec_ref t p = [X86Push p; X86Push t; X86Call "Tgc_dec_ref"; X86Free 2]
-    let arr_ref a nt n = [X86Push n; X86Push nt; X86Push a; X86Call "Tgc_ref"; X86Free 3]
-    let single_ref t a = [X86Push a; X86Push t; X86Call "Tgc_single_ref"; X86Free 2]
-    let collect = [X86Call "Tgc_collect"]
+    let make_root t p = [X86Push p; X86Push t; X86Call "Tgc_make_root"; X86Free 2]
+    let remove_root t p = [X86Push p; X86Push t; X86Call "Tgc_remove_root"; X86Free 2]
+    let ref a nt n = [X86Push n; X86Push nt; X86Push a; X86Call "Tgc_ref"; X86Free 3]
+    let ping p = [X86Push p; X86Call "Tgc_ping"; X86Free 1]
     let dec_ref_args env =
       M.fold
-        (fun arg _ l -> let t, v = env#get_local_t arg in (dec_ref t v) @ l)
+        (fun arg _ l -> let t, v = env#get_local_t arg in (remove_root t v) @ l)
         env#locals
         []
-    let clear_q = [X86Call "Tgc_clear_q"]
+    
   end
 
 module Compile =
@@ -252,7 +251,7 @@ module Compile =
              | S_ST x ->
                 let t, v = env#pop_t in
                 let _, lt, lv = env#create_local_t x in
-                List.concat [GC.single_ref t v; mov_w_reg t lt; mov_w_reg v lv;]
+                List.concat [mov_w_reg t lt; mov_w_reg v lv;]
              | S_BINOP o ->
                 let t, l = env#pop_t in
                 let t, r = env#pop_t in
@@ -287,10 +286,10 @@ module Compile =
              | S_BUILTIN (name, argsn) ->
                 let pre, post = precall_t_b argsn in
                 List.concat [pre; [X86Call ("L"^name)]; post]
-             | S_END -> GC.collect
+             | S_END -> GC.ping (L 1)
              | S_RET ->
                 let t, v = env#pop_t in
-                (GC.inc_ref t v) @ (GC.collect) @ (GC.dec_ref t v)  @ [X86Binop ("->", t, ecx); X86Binop ("->", v, eax)] @ [X86Jmp (name^"_ret")]
+                (GC.make_root t v) @ (GC.ping (L 0)) @ (GC.remove_root t v)  @ [X86Binop ("->", t, ecx); X86Binop ("->", v, eax)] @ [X86Jmp (name^"_ret")]
              | S_ARRAY (b, n) ->
                 let name = match b with Unboxed -> "arrmake" | _ -> "Arrmake" in
                 let t, v = env#allocate_t in
@@ -308,7 +307,7 @@ module Compile =
                 let at, a = env#pop_t in
                 env#push_t at a;
                 List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx v AR; (* set value *)
-                             GC.arr_ref a vt v; (* gc *)]
+                             GC.ref a vt v; (* gc *)]
              | S_INCOSTISTENT_MARK_B ->
                 env#freeze_gc_ping_counter;
                 []
@@ -384,14 +383,14 @@ module Build =
     let make_inc_ref_args env args =
       (List.concat @@
         BatList.mapi
-          (fun ind arg -> let t, v = env#get_local_t arg in GC.inc_ref t v)
-          args) @ (GC.inc_ref (L 0) (L 0))
+          (fun ind arg -> let t, v = env#get_local_t arg in GC.make_root t v)
+          args) @ (GC.make_root (L 0) (L 0))
           
     let make_dec_ref_args env args =
-      (GC.dec_ref (L 0) (L 0))
+      (GC.remove_root (L 0) (L 0))
       @ (List.concat @@
            BatList.mapi
-             (fun ind arg -> let t, v = env#get_local_t arg in GC.dec_ref t v)
+             (fun ind arg -> let t, v = env#get_local_t arg in GC.remove_root t v)
              args)
           
     let regs_to_stack regs = List.map (fun x -> X86Push x) regs, List.map (fun x -> X86Pop x) @@ List.rev regs

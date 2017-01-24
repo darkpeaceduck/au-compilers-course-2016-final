@@ -42,7 +42,7 @@ static multiset<RegisterItem*> roots;
 static multiset<tuple<void*, void*> > roots_ref;
 static set<RegisterItem *> reachable;
 static CachedAllocator alloc(20000, 4, 10);
-static const size_t COLLECT_BOUND = 500;
+static const size_t COLLECT_BOUND = 0;
 
 static bool is_valid(int t, void* p) {
 	return t && registry.count(p);
@@ -96,7 +96,7 @@ static void gc_collect(int full) {
 extern void* gc_malloc(size_t size) {
 	void * ptr = NULL;
 	try {
-		void* ptr = alloc.allocate(size);
+		ptr = alloc.allocate(size);
 	} catch(...) {
 		ptr = NULL;
 		gc_collect(0);

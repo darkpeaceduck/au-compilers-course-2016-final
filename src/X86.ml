@@ -134,15 +134,7 @@ class env = object(self)
     in
     let t, v = self#get_local_t x in
     is_new, t, v
-  (* TOTAL *)
-  method allocated_total = self#allocated_local + self#allocated_stack_max
-  (* CLEAR *)
-  method clear = free_regs := saved_regs; used_regs := S.empty; local_vars := M.empty; allocated_local := 0; allocated_stack_max := 0; stack := []
-  (* STRINGS *)
-  val strings : string list ref = ref [] (* used strings *)
-  method add_string s = strings := s::!strings; D (Printf.sprintf "string%d" @@ List.length !strings - 1)
-  method used_strings = List.rev !strings
-  
+    
   val gc_ping_counter : int ref = ref 0
   val gc_ping_freezer : int ref = ref 0
   val gc_ping_counter_bound  : int = 2
@@ -159,6 +151,19 @@ class env = object(self)
       else
         0
     )
+  val mem_gc_post : instr list ref= ref []
+  method remem_gc_post insr = insr @ !mem_gc_post
+  method get_remem_gc_post = !mem_gc_post
+  (* TOTAL *)
+  method allocated_total = self#allocated_local + self#allocated_stack_max
+  (* CLEAR *)
+  method clear = free_regs := saved_regs; used_regs := S.empty; 
+  local_vars := M.empty; allocated_local := 0; allocated_stack_max := 0; stack := []; gc_ping_counter := 0; gc_ping_freezer := 0;
+  mem_gc_post := []
+  (* STRINGS *)
+  val strings : string list ref = ref [] (* used strings *)
+  method add_string s = strings := s::!strings; D (Printf.sprintf "string%d" @@ List.length !strings - 1)
+  method used_strings = List.rev !strings
 end
 
 module GC =
@@ -256,7 +261,8 @@ module Compile =
              | S_ST x ->
                 let t, v = env#pop_t in
                 let _, lt, lv = env#create_local_t x in
-                List.concat [mov_w_reg t lt; mov_w_reg v lv;]
+                env#remem_gc_post (GC.remove_root_ref lt lv);
+                List.concat [GC.make_root_ref lt lv; mov_w_reg t lt; mov_w_reg v lv;]
              | S_BINOP o ->
                 let t, l = env#pop_t in
                 let t, r = env#pop_t in
@@ -311,7 +317,10 @@ module Compile =
                 let _, i = env#pop_t in
                 let at, a = env#pop_t in
                 env#push_t at a;
+                (* maybe by ref here *)
+                env#remem_gc_post (GC.remove_root at a);
                 List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx v AR; (* set value *)
+                             GC.make_root at a;
                              GC.ref a vt v; (* gc *)]
              | S_INCOSTISTENT_MARK_B ->
                 env#freeze_gc_ping_counter;
@@ -395,14 +404,15 @@ module Build =
     let make_inc_ref_args env args =
       (List.concat @@
         BatList.mapi
-          (fun ind arg -> let t, v = env#get_local_t arg in GC.make_root t v)
+          (fun ind arg -> let t, v = env#get_local_t arg in GC.make_root_ref t v)
           args) @ (GC.make_root (L 0) (L 0))
           
     let make_dec_ref_args env args =
-      (GC.remove_root (L 0) (L 0))
-      @ (List.concat @@
+      (GC.remove_root (L 0) (L 0)) @
+      env#get_remem_gc_post @ 
+      (List.concat @@
            BatList.mapi
-             (fun ind arg -> let t, v = env#get_local_t arg in GC.remove_root t v)
+             (fun ind arg -> let t, v = env#get_local_t arg in GC.remove_root_ref t v)
              args)
           
     let regs_to_stack regs = List.map (fun x -> X86Push x) regs, List.map (fun x -> X86Pop x) @@ List.rev regs

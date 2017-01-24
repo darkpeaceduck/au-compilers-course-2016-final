@@ -8,6 +8,7 @@ type opnd =
   | D of string (* data, 0.. *)
   | AR (* array cell using eax and ecx *)
   | TT of int (* 0 for primitive, 1 for ptr *)
+  | P of opnd
 
 (* EAX, ECX, EDX *)
 (* eax - return value of func *)
@@ -328,7 +329,7 @@ module Compile =
 
 module Show =
   struct
-    let opnd env = function
+    let rec opnd env = function
       | R8 i -> regs8.(i)
       | R i -> regs32.(i)
       | F i -> Printf.sprintf "%d(%%ebp)" ((i + 2) * word_size)              
@@ -338,6 +339,7 @@ module Show =
       | D s -> Printf.sprintf "$%s" s
       | AR -> Printf.sprintf "%d(%%eax,%%ecx,%d)" word_size word_size
       | TT i -> Printf.sprintf "$%d" i
+      | P op -> Printf.sprintf "(%s)" (opnd env op)
                               
     let binop_to_x86 = function
       | "+" -> "addl"

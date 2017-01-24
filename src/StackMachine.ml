@@ -162,7 +162,7 @@ module Compile =
             | If (e, s1, s2) ->
                List.concat [expr e; [S_CJMP ("==0", lbl2)]; stmt s1; [S_JMP lbl1]; [S_LBL lbl2]; stmt s2; [S_LBL lbl1]])
         | S.FCall (name, args) -> (expr @@ E.FCall (name, args)) @ [S_POP]
-        | S.Return e -> expr e @ [S_RET]
+        | S.Return e -> [S_INCOSTISTENT_MARK_B] @ expr e @ [S_RET] @ [S_INCOSTISTENT_MARK_E]
         | S.ArrAssign (a, inds, e) ->
            let inds = List.map (fun i -> expr i) inds in
            let body, last = let last::rbody = List.rev inds in List.rev rbody, last in

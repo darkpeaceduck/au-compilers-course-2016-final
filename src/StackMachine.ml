@@ -103,6 +103,7 @@ module Interpreter =
                 Array.set (V.to_array a) (V.to_int i) v;
                 env#push a;
                 ln + 1
+             | S_INCOSTISTENT_MARK_B | S_INCOSTISTENT_MARK_E -> ln + 1
       in
       run' 0;
       env#get_os

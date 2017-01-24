@@ -165,6 +165,10 @@ module GC =
   struct
     let make_root t p = [X86Push p; X86Push t; X86Call "Tgc_make_root"; X86Free 2]
     let remove_root t p = [X86Push p; X86Push t; X86Call "Tgc_remove_root"; X86Free 2]
+    (* warn - ref pointer inside function *)
+    let make_root_ref t p = [X86Push (P p); X86Push (P t); X86Call "Tgc_make_root_ref"; X86Free 2]
+    (* warn - ref pointer inside function *)
+    let remove_root_ref t p = [X86Push (P p); X86Push (P t); X86Call "Tgc_remove_root_ref"; X86Free 2]
     let ref a nt n = [X86Push n; X86Push nt; X86Push a; X86Call "Tgc_ref"; X86Free 3]
     let ping p = [X86Push p; X86Call "Tgc_ping"; X86Free 1]
     let dec_ref_args env =

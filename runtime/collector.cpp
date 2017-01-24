@@ -39,6 +39,7 @@ public:
 
 static map<void*, RegisterItem *> registry;
 static set<RegisterItem*> roots;
+static set<tuple<void*, void*> > roots_ref;
 static set<RegisterItem *> reachable;
 static CachedAllocator alloc(20000, 4, 10);
 static const size_t COLLECT_BOUND = 500;
@@ -73,6 +74,13 @@ static void gc_collect(int full) {
 		for(auto it : roots) {
 			collect_dfs(it);
 		}
+		for(auto it : roots_ref) {
+			int t = *((int*)get<0>(it));
+			void* p = *((void**)get<1>(it));
+			if (is_valid(t, p)) {
+				collect_dfs(registry[p]);
+			}
+		}
 	}
 	for(auto it : registry) {
 		RegisterItem * item = it.second;
@@ -98,6 +106,8 @@ extern void* gc_malloc(size_t size) {
 			ptr = NULL;
 		}
 	}
+	if (ptr == NULL)
+		return NULL;
 	RegisterItem * item = new RegisterItem(ptr);
 	registry[ptr] = item;
 	return ptr;
@@ -116,6 +126,13 @@ extern void Tgc_remove_root(int t, void *p) {
 	if (is_valid(t, p)) {
 		roots.erase(registry[p]);
 	}
+}
+extern void Tgc_make_root_ref(void * t, void *p) {
+	roots_ref.insert(make_tuple(t, p));
+}
+
+extern void Tgc_remove_root_ref(void * t, void *p) {
+	roots_ref.erase(make_tuple(t, p));
 }
 
 extern void Tgc_ref(void* a, int nt, void* n) {

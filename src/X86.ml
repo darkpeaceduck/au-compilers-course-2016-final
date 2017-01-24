@@ -317,10 +317,7 @@ module Compile =
                 let _, i = env#pop_t in
                 let at, a = env#pop_t in
                 env#push_t at a;
-                (* maybe by ref here *)
-                env#remem_gc_post (GC.remove_root at a);
                 List.concat [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx v AR; (* set value *)
-                             GC.make_root at a;
                              GC.ref a vt v; (* gc *)]
              | S_INCOSTISTENT_MARK_B ->
                 env#freeze_gc_ping_counter;

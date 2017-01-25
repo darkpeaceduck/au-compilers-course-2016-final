@@ -6,8 +6,8 @@ all:builtins.o collector.o allocator.o
 builtins.o:builtins.cpp
 	g++ $(FLAGS) -c builtins.cpp
 
-collector.o:collector.cpp
-	g++ $(FLAGS) -c collector.cpp 
+collector.o:collector.cpp collector.s
+	g++ $(FLAGS) -c collector.cpp collector.s
 
 allocator.o:allocator.cpp
 	g++ $(FLAGS) -c allocator.cpp 

@@ -70,6 +70,7 @@ module GC =
     X86Lea (t, eax); X86Lea(p, edx); X86Push eax; X86Push edx; X86Call "Tgc_remove_root_ref"; X86Free 2;X86Pop edx; X86Pop eax;]
     let ref a nt n = [X86Push n; X86Push nt; X86Push a; X86Call "Tgc_ref"; X86Free 3]
     let ping p = [X86Push p; X86Call "Tgc_ping"; X86Free 1]
+    let init = [X86Call "Tgc_init";]
     
   end
   
@@ -449,6 +450,7 @@ module Build =
          [X86Enter];
          push_regs;
          [X86Allocate env#allocated_total];
+         GC.init;
          code;
          [X86Lbl "main_ret"];
          [X86Free env#allocated_total];

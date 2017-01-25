@@ -3,11 +3,18 @@
 .text
 switchme:
 	pushl %eax
-	movl %esp, %eax
-	movl %edi, %esp
+	pushl %ebx
+	pushl %ecx
+	movl 20(%esp), %eax
+	movl 16(%esp), %ebx
+	movl %esp, %ecx
+	movl %ebx, %esp
+	pushl %ecx
 	pushl %eax
-	movl %esi, %edi
 	call gc_collect
+	popl %eax
 	popl %esp
+	popl %ecx
+	popl %ebx
 	popl %eax
 	ret

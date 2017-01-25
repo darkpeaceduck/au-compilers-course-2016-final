@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <mcheck.h>
 #include "allocator.h"
 using namespace std;
 
@@ -120,10 +121,12 @@ extern "C" void gc_collect(int full) {
 	}
 }
 
-extern "C" void switchme(void *, int);
+extern "C"  {
+	void switchme(void *, int);
+}
 
 static void run_gc_collect(int full) {
-	switchme(collect_stack, full);
+	switchme((char*)collect_stack + collect_stack_size - 1, full);
 }
 
 extern void* gc_malloc(size_t size) {
@@ -152,7 +155,6 @@ extern "C" {
 extern void Tgc_init() {
 	collect_stack = malloc(collect_stack_size);
 	collect_stack_redzone = (char*)collect_stack + collect_redzone_offset;
-	collect_stack = (char*)collect_stack + collect_stack_size - 1;
 }
 
 extern void Tgc_make_root(int t, void* p) {
@@ -188,6 +190,10 @@ extern void Tgc_ping(int full) {
 	if (alloc.last_memory_allocated() >= COLLECT_BOUND || full) {
 		run_gc_collect(full);
 		alloc.clear_last_memory_counter();
+		if (full) {
+			if (mprobe(collect_stack) == MCHECK_OK)
+			free(collect_stack);
+		}
 	}
 }
 

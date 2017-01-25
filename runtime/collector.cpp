@@ -41,8 +41,8 @@ static map<void*, RegisterItem *> registry;
 static multiset<RegisterItem*> roots;
 static multiset<tuple<void*, void*> > roots_ref;
 static set<RegisterItem *> reachable;
-static CachedAllocator alloc(20000, 4, 10);
-static const size_t COLLECT_BOUND = 0;
+static CachedAllocator alloc(40000, 10, 10);
+static const size_t COLLECT_BOUND = 500;
 
 static bool is_valid(int t, void* p) {
 	return t && registry.count(p);
@@ -146,7 +146,7 @@ extern void Tgc_ref(void* a, int nt, void* n) {
 }
 
 extern void Tgc_ping(int full) {
-	if (alloc.last_memory_allocated() > COLLECT_BOUND) {
+	if (alloc.last_memory_allocated() >= COLLECT_BOUND || full) {
 		gc_collect(full);
 		alloc.clear_last_memory_counter();
 	}

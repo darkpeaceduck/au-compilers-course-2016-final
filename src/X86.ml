@@ -42,6 +42,7 @@ type instr =
   | X86Enter
   | X86Leave
   | X86Ret
+  | X86Lea of opnd * opnd
   | X86Allocate of int
   | X86Free of int
 
@@ -62,9 +63,11 @@ module GC =
     let make_root t p = [X86Push p; X86Push t; X86Call "Tgc_make_root"; X86Free 2]
     let remove_root t p = [X86Push p; X86Push t; X86Call "Tgc_remove_root"; X86Free 2]
     (* warn - ref pointer inside function *)
-    let make_root_ref t p = [X86Push (P p); X86Push (P t); X86Call "Tgc_make_root_ref"; X86Free 2]
+    let make_root_ref t p = [X86Push eax; X86Push edx; X86Lea (t, eax); X86Lea(p, edx); 
+    X86Push eax; X86Push edx; X86Call "Tgc_make_root_ref"; X86Free 2; X86Pop edx; X86Pop eax;]
     (* warn - ref pointer inside function *)
-    let remove_root_ref t p = [X86Push (P p); X86Push (P t); X86Call "Tgc_remove_root_ref"; X86Free 2]
+    let remove_root_ref t p = [X86Push eax; X86Push edx; 
+    X86Lea (t, eax); X86Lea(p, edx); X86Push eax; X86Push edx; X86Call "Tgc_remove_root_ref"; X86Free 2;X86Pop edx; X86Pop eax;]
     let ref a nt n = [X86Push n; X86Push nt; X86Push a; X86Call "Tgc_ref"; X86Free 3]
     let ping p = [X86Push p; X86Call "Tgc_ping"; X86Free 1]
     
@@ -153,7 +156,7 @@ class env = object(self)
     
   val gc_ping_counter : int ref = ref 0
   val gc_ping_freezer : int ref = ref 0
-  val gc_ping_counter_bound  : int = 2
+  val gc_ping_counter_bound  : int = 1
   method freeze_gc_ping_counter = gc_ping_freezer := 1
   method unfreeze_gc_ping_counter = gc_ping_freezer := 0
   method next_gc_instruction =
@@ -215,11 +218,11 @@ module Compile =
           | 0 ->
              let t, v = env#allocate_t in
              let insr = env#push_t t v in 
-             insr , [X86Binop ("->", ecx, t); X86Binop ("->", eax, v)]
+             [] , [X86Binop ("->", ecx, t); X86Binop ("->", eax, v)] @ insr
           | n ->
              let t, v, insr = env#pop_t in
              let pre, post = precall' (n - 1) in
-             [X86Push t; X86Push v] @ pre, post @ insr
+             [X86Push t; X86Push v] @ insr @ pre, post
         in
         let pre, post = precall' n in
         pre, (X86Free (2 * n))::post
@@ -230,11 +233,11 @@ module Compile =
           | 0 ->
              let t, v = env#allocate_t in
              let insr = env#push_t t v in
-             insr, [X86Binop ("->", ecx, t); X86Binop ("->", eax, v)]
+             [], [X86Binop ("->", ecx, t); X86Binop ("->", eax, v)] @ insr
           | n ->
              let t, v, insr = env#pop_t in
              let pre, post = precall' (n - 1) in
-             (X86Push v)::pre, post @ insr
+             [X86Push v] @ insr @ pre, post
         in
         let pre, post = precall' n in
         pre, (X86Free n)::post
@@ -295,7 +298,7 @@ module Compile =
              | S_BUILTIN (name, argsn) ->
                 let pre, post = precall_t_b argsn in
                 List.concat [pre; [X86Call ("L"^name)]; post]
-             | S_END -> GC.ping (L 1)
+             | S_END -> env#freeze_gc_ping_counter; GC.ping (L 1)
              | S_RET ->
                 let t, v, insr = env#pop_t in
                 insr @ [X86Binop ("->", t, ecx); X86Binop ("->", v, eax)] @ [X86Jmp (name^"_ret")]
@@ -303,8 +306,8 @@ module Compile =
                 let name = match b with Unboxed -> "arrmake" | _ -> "Arrmake" in
                 let t, v = env#allocate_t in
                 let insr = env#push_t t v in
-                insr @ List.concat 
-                [[X86Push (L 0); X86Push (L n); X86Call ("L"^name); X86Free 2; X86Binop ("->", ecx, t); X86Binop ("->", eax, v)];]
+                List.concat 
+                [[X86Push (L 0); X86Push (L n); X86Call ("L"^name); X86Free 2; X86Binop ("->", ecx, t); X86Binop ("->", eax, v)];] @ insr
              | S_ELEM ->
                 let t, i, insr = env#pop_t in
                 let t, a, insr2 = env#pop_t in
@@ -319,12 +322,6 @@ module Compile =
                 insr @ insr2 @ insr3 @ (List.concat 
                 [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx v AR; (* set value *)
                              GC.ref a vt v; (* gc *)])
-             | S_INCOSTISTENT_MARK_B ->
-                env#freeze_gc_ping_counter;
-                []
-             | S_INCOSTISTENT_MARK_E ->
-                env#unfreeze_gc_ping_counter;
-                []
            in
      let x86postGC = 
       if env#next_gc_instruction = 0 then
@@ -392,6 +389,7 @@ module Show =
         | X86Ret -> "\tret"
         | X86Allocate n -> ![X86Binop ("-", L (n * word_size), esp)]
         | X86Free n -> ![X86Binop ("+", L (n * word_size), esp)]
+        | X86Lea (x, y) -> Printf.sprintf  "\tleal\t%s,\t%s" (opnd x) (opnd y)
       in
       instr' i
   end
@@ -402,10 +400,9 @@ module Build =
       (List.concat @@
         BatList.mapi
           (fun ind arg -> let t, v = env#get_local_t arg in GC.make_root_ref t v)
-          args) @ (GC.make_root (L 0) (L 0))
+          args)
           
     let make_dec_ref_args env args =
-      (GC.remove_root (L 0) (L 0)) @
       env#get_remem_gc_post @ 
       (List.concat @@
            BatList.mapi

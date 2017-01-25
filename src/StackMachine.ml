@@ -22,8 +22,6 @@ module Instrs =
       | S_ARRAY of at * int (* false for unboxed, true for boxed + len *) (* STACK *)
       | S_ELEM (* first array, then index *) (* STACK *)
       | S_STA (* first array, then index, then value *) (* STACK *)
-      | S_INCOSTISTENT_MARK_B
-      | S_INCOSTISTENT_MARK_E
   end
 
 module Interpreter =
@@ -103,7 +101,6 @@ module Interpreter =
                 Array.set (V.to_array a) (V.to_int i) v;
                 env#push a;
                 ln + 1
-             | S_INCOSTISTENT_MARK_B | S_INCOSTISTENT_MARK_E -> ln + 1
       in
       run' 0;
       env#get_os
@@ -153,7 +150,7 @@ module Compile =
       let rec stmt =
         function
         | S.Skip -> []
-        | S.Assign (x, e) -> [S_INCOSTISTENT_MARK_B] @ expr e @ [S_ST x] @ [S_INCOSTISTENT_MARK_E]
+        | S.Assign (x, e) -> expr e @ [S_ST x]
         | S.Seq (l, r) -> stmt l @ stmt r
         | S.While _ | If _ as cyc ->
            let lbl1, lbl2 = env#new_lbl, env#new_lbl in
@@ -163,11 +160,11 @@ module Compile =
             | If (e, s1, s2) ->
                List.concat [expr e; [S_CJMP ("==0", lbl2)]; stmt s1; [S_JMP lbl1]; [S_LBL lbl2]; stmt s2; [S_LBL lbl1]])
         | S.FCall (name, args) -> (expr @@ E.FCall (name, args)) @ [S_POP]
-        | S.Return e -> [S_INCOSTISTENT_MARK_B] @ expr e @ [S_RET] @ [S_INCOSTISTENT_MARK_E]
+        | S.Return e -> expr e @ [S_RET]
         | S.ArrAssign (a, inds, e) ->
            let inds = List.map (fun i -> expr i) inds in
            let body, last = let last::rbody = List.rev inds in List.rev rbody, last in
-           List.concat [[S_INCOSTISTENT_MARK_B]; [S_LD a]; List.concat @@ List.map (fun i -> i @ [S_ELEM]) body; last; expr e; [S_STA; S_POP]; [S_INCOSTISTENT_MARK_E]]
+           List.concat [[S_LD a]; List.concat @@ List.map (fun i -> i @ [S_ELEM]) body; last; expr e; [S_STA; S_POP]]
       in
       let fdef (name, args, body) = name, args, stmt body in
       List.map (fun fd -> fdef fd) fdefs, stmt main @ [S_END]

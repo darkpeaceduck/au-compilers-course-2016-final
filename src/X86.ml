@@ -8,7 +8,7 @@ type opnd =
   | D of string (* data, 0.. *)
   | AR (* array cell using eax and ecx *)
   | TT of int (* 0 for primitive, 1 for ptr *)
-  | P of opnd
+  | P of opnd (* pointer *)
 
 (* EAX, ECX, EDX *)
 (* eax - return value of func *)
@@ -45,7 +45,8 @@ type instr =
   | X86Lea of opnd * opnd
   | X86Allocate of int
   | X86Free of int
-
+                 
+(* comparator for regs *)
 module S =
   BatSet.Make
     (struct
@@ -56,6 +57,7 @@ module S =
         | _ -> 0
     end)
 module M = BatMap.Make(String)
+(* we need even num of regs because we save val + type *)
 let saved_regs = S.of_list [esi; edi]
 
 module GC =
@@ -125,11 +127,11 @@ class env = object(self)
      | _ -> ());
     stack := stack';
     s
-  (* GC WITH TYPES *)
+  (* OPS WITH TYPES *)
   method allocate_t =
     let m = self#allocate in
     match m with
-    | R n -> esi, edi (* R n, R (n + 1) *)
+    | R n -> R n, R (n + 1)
     | S n -> S n, S (n + 1)
   method push_t t v =
     self#push t; self#push v;
@@ -154,7 +156,7 @@ class env = object(self)
     in
     let t, v = self#get_local_t x in
     is_new, t, v
-    
+  (* GC *)  
   val gc_ping_counter : int ref = ref 0
   val gc_ping_freezer : int ref = ref 0
   val gc_ping_counter_bound  : int = 1
@@ -163,23 +165,23 @@ class env = object(self)
   method next_gc_instruction =
     if !gc_ping_freezer = 1 then
       0
-    else (
-      gc_ping_counter := !gc_ping_counter + 1;
-      if !gc_ping_counter = gc_ping_counter_bound then (
-        gc_ping_counter := 0;
-        1)
-      else
-        0
-    )
+    else
+      (gc_ping_counter := !gc_ping_counter + 1;
+       if !gc_ping_counter = gc_ping_counter_bound then
+         (gc_ping_counter := 0;
+          1)
+       else
+         0)
   val mem_gc_post : instr list ref= ref []
   method remem_gc_post insr = insr @ !mem_gc_post
   method get_remem_gc_post = !mem_gc_post
   (* TOTAL *)
   method allocated_total = self#allocated_local + self#allocated_stack_max
   (* CLEAR *)
-  method clear = free_regs := saved_regs; used_regs := S.empty; 
-  local_vars := M.empty; allocated_local := 0; allocated_stack_max := 0; stack := []; gc_ping_counter := 0; gc_ping_freezer := 0;
-  mem_gc_post := []
+  method clear =
+    free_regs := saved_regs; used_regs := S.empty; local_vars := M.empty;
+    allocated_local := 0; allocated_stack_max := 0; stack := [];
+    gc_ping_counter := 0; gc_ping_freezer := 0; mem_gc_post := []
   (* STRINGS *)
   val strings : string list ref = ref [] (* used strings *)
   method add_string s = strings := s::!strings; D (Printf.sprintf "string%d" @@ List.length !strings - 1)
@@ -198,28 +200,16 @@ module Compile =
         | R _, _ | _, R _ -> [X86Binop ("->", f, t)]
         | _ -> [X86Binop ("->", f, r); X86Binop ("->", r, t)]
       in
-      (* prologue and epilogue for funcs *)
-      let precall n =
-        let rec precall' = function
-          | 0 ->
-             let x = env#allocate in
-             env#push x;
-             [], [X86Binop ("->", eax, x)]
-          | n ->
-             let x = env#pop in
-             let pre, post = precall' (n - 1) in
-             (X86Push x)::pre, post
-        in
-        let pre, post = precall' n in
-        pre, (X86Free n)::post
+      let mov_t (t, v) (t', v') =
+        mov_w_reg t t' @ mov_w_reg v v'
       in
-      (* prologue and epilogur for funcs with gc types *)
+      (* prologue and epilogue for funcs with gc types *)
       let precall_t n =
         let rec precall' = function
           | 0 ->
              let t, v = env#allocate_t in
              let insr = env#push_t t v in 
-             [] , [X86Binop ("->", ecx, t); X86Binop ("->", eax, v)] @ insr
+             [] , mov_t (ecx, eax) (t, v) @ insr
           | n ->
              let t, v, insr = env#pop_t in
              let pre, post = precall' (n - 1) in
@@ -228,7 +218,7 @@ module Compile =
         let pre, post = precall' n in
         pre, (X86Free (2 * n))::post
       in
-      (* prologue and epilogur for funcs with gc types for builtin *)
+      (* prologue and epilogue for funcs with gc types for builtin *)
       let precall_t_b n =
         let rec precall' = function
           | 0 ->
@@ -236,7 +226,7 @@ module Compile =
              let insr = env#push_t t v in
              [], [X86Binop ("->", ecx, t); X86Binop ("->", eax, v)] @ insr
           | n ->
-             let t, v, insr = env#pop_t in
+             let _, v, insr = env#pop_t in
              let pre, post = precall' (n - 1) in
              [X86Push v] @ insr @ pre, post
         in
@@ -251,20 +241,21 @@ module Compile =
              | S_PUSH n ->
                 let t, v = env#allocate_t in
                 let insr = env#push_t t v in 
-                insr @ (match n with
-                 | V.Int i -> [X86Binop ("->", L 0, t); X86Binop ("->", L i, v)]
-                 | V.String s -> [X86Binop ("->", L 1, t); X86Binop ("->", env#add_string s, v)])
+                insr @
+                  (match n with
+                   | V.Int i -> [X86Binop ("->", L 0, t); X86Binop ("->", L i, v)]
+                   | V.String s -> [X86Binop ("->", L 1, t); X86Binop ("->", env#add_string s, v)])
              | S_POP -> let _, _, insr = env#pop_t in insr
              | S_LD x ->
                 let t, v = env#get_local_t x in
                 let at, av = env#allocate_t in
                 let insr = env#push_t at av in
-                insr @ mov_w_reg t at @ mov_w_reg v av
+                insr @ mov_t (t, v) (at, av)
              | S_ST x ->
                 let t, v, insr = env#pop_t in
                 let _, lt, lv = env#create_local_t x in
                 env#remem_gc_post (GC.remove_root_ref lt lv);
-                insr @ (List.concat [GC.make_root_ref lt lv; mov_w_reg t lt; mov_w_reg v lv;])
+                insr @ (List.concat [GC.make_root_ref lt lv; mov_t (t, v) (lt, lv)])
              | S_BINOP o ->
                 let t, l, insr = env#pop_t in
                 let t, r, insr2 = env#pop_t in

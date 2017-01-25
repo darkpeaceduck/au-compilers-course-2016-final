@@ -46,6 +46,36 @@ type instr =
   | X86Allocate of int
   | X86Free of int
                  
+(* func inv *)
+let call name args =
+  List.concat
+    [(List.concat @@ List.map (fun x -> [X86Push x]) @@ List.rev args);
+     [X86Call name; X86Free (List.length args)]]
+
+(* gc *)
+module GC =
+  struct
+    let make_root t p = call "Tgc_make_root" [t; p]
+    let remove_root t p = call "Tgc_remove_root" [t; p]
+    (* warn - ref pointer inside function *)
+    let make_root_ref t p =
+      List.concat
+        [[X86Push eax; X86Push ecx];
+         [X86Lea (t, ecx); X86Lea(p, eax)]; 
+         call "Tgc_make_root_ref" [ecx; eax];
+         [X86Pop ecx; X86Pop eax]]
+    (* warn - ref pointer inside function *)
+    let remove_root_ref t p =
+      List.concat
+        [[X86Push eax; X86Push ecx];
+         [X86Lea (t, ecx); X86Lea(p, eax)]; 
+         call "Tgc_remove_root_ref" [ecx; eax];
+         [X86Pop ecx; X86Pop eax]]
+    let ref a nt n = call "Tgc_ref" [a; nt; n]
+    let ping p = call "Tgc_ping" [p]
+    let init = call "Tgc_init" [] 
+  end
+  
 (* comparator for regs *)
 module S =
   BatSet.Make
@@ -59,24 +89,8 @@ module S =
 module M = BatMap.Make(String)
 (* we need even num of regs because we save val + type *)
 let saved_regs = S.of_list [esi; edi]
-
-module GC =
-  struct
-    let make_root t p = [X86Push p; X86Push t; X86Call "Tgc_make_root"; X86Free 2]
-    let remove_root t p = [X86Push p; X86Push t; X86Call "Tgc_remove_root"; X86Free 2]
-    (* warn - ref pointer inside function *)
-    let make_root_ref t p = [X86Push eax; X86Push edx; X86Lea (t, eax); X86Lea(p, edx); 
-    X86Push eax; X86Push edx; X86Call "Tgc_make_root_ref"; X86Free 2; X86Pop edx; X86Pop eax;]
-    (* warn - ref pointer inside function *)
-    let remove_root_ref t p = [X86Push eax; X86Push edx; 
-    X86Lea (t, eax); X86Lea(p, edx); X86Push eax; X86Push edx; X86Call "Tgc_remove_root_ref"; X86Free 2;X86Pop edx; X86Pop eax;]
-    let ref a nt n = [X86Push n; X86Push nt; X86Push a; X86Call "Tgc_ref"; X86Free 3]
-    let ping p = [X86Push p; X86Call "Tgc_ping"; X86Free 1]
-    let init = [X86Call "Tgc_init";]
-    
-  end
-  
-  
+                           
+(* env *)
 class env = object(self)
   (* REGISTERS *)
   val free_regs : S.t ref = ref saved_regs (* caller free regs *)
@@ -298,8 +312,7 @@ module Compile =
                 let name = match b with Unboxed -> "arrmake" | _ -> "Arrmake" in
                 let t, v = env#allocate_t in
                 let insr = env#push_t t v in
-                List.concat 
-                [[X86Push (L 0); X86Push (L n); X86Call ("L"^name); X86Free 2; X86Binop ("->", ecx, t); X86Binop ("->", eax, v)];] @ insr
+                List.concat [[X86Push (L 0); X86Push (L n); X86Call ("L"^name); X86Free 2; X86Binop ("->", ecx, t); X86Binop ("->", eax, v)]] @ insr
              | S_ELEM ->
                 let t, i, insr = env#pop_t in
                 let t, a, insr2 = env#pop_t in
@@ -315,17 +328,13 @@ module Compile =
                 [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx v AR; (* set value *)
                              GC.ref a vt v; (* gc *)])
            in
-     let x86postGC = 
-      if env#next_gc_instruction = 0 then
-      []
-     else
-      GC.ping (L 0)
-     in
+           let x86postGC = if env#next_gc_instruction = 0 then [] else GC.ping (L 0)
+           in
 	   x86code @ x86postGC @ (compile code')
       in
       compile code
   end
-
+    
 module Show =
   struct
     let rec opnd env = function
@@ -402,7 +411,7 @@ module Build =
              args)
           
     let regs_to_stack regs = List.map (fun x -> X86Push x) regs, List.map (fun x -> X86Pop x) @@ List.rev regs
-
+                                                                                                          
     (* OLD *)
     (* [args        ][ptr to back][saved ebp][saved regs  ][allocated mem on stack for func] *)
     (*                                                     [local vars    ][local stack    ] *)

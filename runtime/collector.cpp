@@ -135,7 +135,7 @@ extern void* gc_malloc(size_t size) {
 		ptr = alloc.allocate(size);
 	} catch(...) {
 		ptr = NULL;
-		gc_collect(0);
+		run_gc_collect(0);
 		try {
 			ptr = alloc.allocate(size);
 		} catch(...) {

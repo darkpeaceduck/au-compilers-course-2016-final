@@ -39,7 +39,7 @@ public:
 
 static map<void*, RegisterItem *> registry;
 static multiset<RegisterItem*> roots;
-static multiset<tuple<void*, void*> > roots_ref;
+static set<tuple<void*, void*> > roots_ref;
 static set<RegisterItem *> reachable;
 static CachedAllocator alloc(40000, 10, 10);
 static const size_t COLLECT_BOUND = 500;

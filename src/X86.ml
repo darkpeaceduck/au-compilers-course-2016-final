@@ -254,25 +254,25 @@ module Compile =
              match i with
              | S_PUSH n ->
                 let t, v = env#allocate_t in
-                let insr = env#push_t t v in 
-                insr @
+                let instr = env#push_t t v in 
+                instr @
                   (match n with
-                   | V.Int i -> [X86Binop ("->", L 0, t); X86Binop ("->", L i, v)]
-                   | V.String s -> [X86Binop ("->", L 1, t); X86Binop ("->", env#add_string s, v)])
-             | S_POP -> let _, _, insr = env#pop_t in insr
+                   | V.Int i -> mov_t (L 0, L i) (t, v)
+                   | V.String s -> mov_t (L 1, env#add_string s) (t, v))
+             | S_POP -> let _, _, instr = env#pop_t in instr
              | S_LD x ->
                 let t, v = env#get_local_t x in
                 let at, av = env#allocate_t in
-                let insr = env#push_t at av in
-                insr @ mov_t (t, v) (at, av)
+                let instr = env#push_t at av in
+                instr @ mov_t (t, v) (at, av)
              | S_ST x ->
-                let t, v, insr = env#pop_t in
+                let t, v, instr = env#pop_t in
                 let _, lt, lv = env#create_local_t x in
                 env#remem_gc_post (GC.remove_root_ref lt lv);
-                insr @ (List.concat [GC.make_root_ref lt lv; mov_t (t, v) (lt, lv)])
+                List.concat [instr; GC.make_root_ref lt lv; mov_t (t, v) (lt, lv)]
              | S_BINOP o ->
-                let t, l, insr = env#pop_t in
-                let t, r, insr2 = env#pop_t in
+                let t, l, instr = env#pop_t in
+                let t, r, instr2 = env#pop_t in
                 let cmds =
                   match o with
                   | "+" | "-" | "*" ->
@@ -291,13 +291,13 @@ module Compile =
                      in
                      pre @ [X86Binop ("@", eax, eax); X86Binop ("=", l', r'); X86Set (o, al); X86Binop ("->", eax, r)] @ post
                 in
-                let insr3 = env#push_t t r in
-                insr @ insr2 @ insr3 @ cmds
+                let instr3 = env#push_t t r in
+                List.concat [instr; instr2; instr3; cmds]
              | S_LBL l -> [X86Lbl l]
              | S_JMP l -> [X86Jmp l]
              | S_CJMP (c, l) ->
-                let _, v, insr = env#pop_t in
-                insr @ [X86Binop ("->", v, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)]
+                let _, v, instr = env#pop_t in
+                instr @ [X86Binop ("->", v, eax); X86Binop ("=", L 0, eax); X86CJmp (c, l)]
              | S_CALL (name, args) ->
                 let pre, post = precall_t (List.length args) in
                 List.concat [pre; [X86Call name]; post]
@@ -306,27 +306,25 @@ module Compile =
                 List.concat [pre; [X86Call ("L"^name)]; post]
              | S_END -> env#freeze_gc_ping_counter; GC.ping (L 1)
              | S_RET ->
-                let t, v, insr = env#pop_t in
-                insr @ [X86Binop ("->", t, ecx); X86Binop ("->", v, eax)] @ [X86Jmp (name^"_ret")]
+                let t, v, instr = env#pop_t in
+                List.concat [instr; mov_t (t, v) (ecx, eax); [X86Jmp (name^"_ret")]]
              | S_ARRAY (b, n) ->
                 let name = match b with Unboxed -> "arrmake" | _ -> "Arrmake" in
                 let t, v = env#allocate_t in
-                let insr = env#push_t t v in
-                List.concat [[X86Push (L 0); X86Push (L n); X86Call ("L"^name); X86Free 2; X86Binop ("->", ecx, t); X86Binop ("->", eax, v)]] @ insr
+                let instr = env#push_t t v in
+                List.concat [call ("L"^name) [L n; L 0]; mov_t (ecx, eax) (t, v); instr]
              | S_ELEM ->
-                let t, i, insr = env#pop_t in
-                let t, a, insr2 = env#pop_t in
+                let t, i, instr = env#pop_t in
+                let t, a, instr2 = env#pop_t in
                 let t, v = env#allocate_t in
-                let insr3 = env#push_t t v in
-                insr @ insr2 @ insr3 @ [X86Push i; X86Push a; X86Call ("Larrget"); X86Free 2; X86Binop ("->", ecx, t); X86Binop ("->", eax, v)]
+                let instr3 = env#push_t t v in
+                List.concat [instr; instr2; instr3; call "Larrget" [a; i]; mov_t (ecx, eax) (t, v)]
              | S_STA ->
-                let vt, v, insr = env#pop_t in
-                let _, i, insr2 = env#pop_t in
-                let at, a, insr3 = env#pop_t in
-                let insr3 = env#push_t at a in
-                insr @ insr2 @ insr3 @ (List.concat 
-                [[X86Binop ("->", a, eax); X86Binop ("->", i, ecx)]; mov_w_reg ~r:edx v AR; (* set value *)
-                             GC.ref a vt v; (* gc *)])
+                let vt, v, instr = env#pop_t in
+                let _, i, instr2 = env#pop_t in
+                let at, a, instr3 = env#pop_t in
+                let instr4 = env#push_t at a in
+                List.concat [instr; instr2; instr3; instr4; mov_t (a, i) (eax, ecx); mov_w_reg ~r:edx v AR; GC.ref a vt v]
            in
            let x86postGC = if env#next_gc_instruction = 0 then [] else GC.ping (L 0)
            in
@@ -435,7 +433,7 @@ module Build =
          [X86Allocate env#allocated_total];
          code;
          [X86Lbl (name^"_ret")];
-         [X86Push eax]; [X86Push ecx]; dec_ref_args; [X86Pop ecx]; [X86Pop eax];
+         [X86Push eax]; [X86Push ecx]; dec_ref_args; [X86Pop ecx]; [X86Pop eax]; (* presave and restore ret value *)
          [X86Free env#allocated_total];
          pop_regs;
          [X86Leave];

@@ -20,3 +20,5 @@ runtime/runtime.o
 runtime/builtins.o
 runtime/collector.o
 runtime/libruntime.a
+runtime/allocator.o
+runtime/collector_s.o

@@ -27,4 +27,4 @@ begin
 	return f1(A)
 end
 
-write(g(Arrmake(100, {})))
+write(g(Arrmake(20, {})))

@@ -9,15 +9,15 @@
 Implementing a simple language.
 What do we have so far:
 
-                                  | Interepreter | Stack Machine | x86 |
---------------------------------- | ------------ | ------------- | --- |
-binops                            | [x]          | [x]           | [x] |
-if/while/for/repeat control flows | [x]          | [x]           | [x] |
-funcs                             | [x]          | [x]           | [x] |
-builtins                          | [x]          | [x]           | [x] |
-strings                           | [x]          | [x]           | [x] |
-arrays                            | [x]          | [x]           | [x] |
-garbage collector                 | -            | -             | [x] |
+|                                   | Interepreter | Stack Machine | x86 |
+| --------------------------------- | ------------ | ------------- | --- |
+| binops                            | [x]          | [x]           | [x] |
+| if/while/for/repeat control flows | [x]          | [x]           | [x] |
+| funcs                             | [x]          | [x]           | [x] |
+| builtins                          | [x]          | [x]           | [x] |
+| strings                           | [x]          | [x]           | [x] |
+| arrays                            | [x]          | [x]           | [x] |
+| garbage collector                 | -            | -             | [x] |
 
 ## syntax
 
